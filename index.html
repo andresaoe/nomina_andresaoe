@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Control de Nómina by @andresaoe</title>
+    <script>
+      ;(function () {
+        const { location } = window
+        if (location.search.startsWith('?/')) {
+          const route = location.search
+            .slice(2)
+            .split('&')
+            .map((s) => s.replace(/~and~/g, '&'))
+            .join('&')
+          const newUrl = location.pathname + route + location.hash
+          window.history.replaceState(null, '', newUrl)
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

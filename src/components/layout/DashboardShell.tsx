@@ -1,0 +1,84 @@
+import type { ReactNode } from 'react'
+
+type NavItem = {
+  id: string
+  label: string
+}
+
+export default function DashboardShell(props: {
+  title: string
+  subtitle?: string
+  navItems: readonly NavItem[]
+  activeNavId: string
+  onSelectNav: (id: string) => void
+  rightSlot?: ReactNode
+  children: ReactNode
+}) {
+  const { title, subtitle, navItems, activeNavId, onSelectNav, rightSlot, children } = props
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+        <div className="lg:flex lg:gap-6">
+          <aside className="hidden lg:block lg:w-56 lg:shrink-0">
+            <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+              <div className="px-2 py-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+                Navegación
+              </div>
+              <div className="mt-2 grid gap-1">
+                {navItems.map((item) => {
+                  const active = item.id === activeNavId
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => onSelectNav(item.id)}
+                      className={
+                        active
+                          ? 'w-full rounded-xl bg-slate-950 px-3 py-2 text-left text-sm text-white'
+                          : 'w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100'
+                      }
+                    >
+                      {item.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </aside>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <h1 className="truncate text-xl font-semibold text-slate-950 sm:text-2xl">{title}</h1>
+                {subtitle ? <div className="mt-1 text-sm text-slate-600">{subtitle}</div> : null}
+                <div className="mt-3 flex flex-wrap gap-2 lg:hidden">
+                  {navItems.map((item) => {
+                    const active = item.id === activeNavId
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => onSelectNav(item.id)}
+                        className={
+                          active
+                            ? 'rounded-full border border-slate-950 bg-slate-950 px-3 py-1 text-sm text-white'
+                            : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700 hover:bg-slate-100'
+                        }
+                      >
+                        {item.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              {rightSlot ? <div className="flex shrink-0 items-center gap-2">{rightSlot}</div> : null}
+            </div>
+
+            <div className="mt-6">{children}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
