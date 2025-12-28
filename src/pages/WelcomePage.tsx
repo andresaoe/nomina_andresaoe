@@ -4,13 +4,13 @@ export default function WelcomePage() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(1200px_circle_at_20%_10%,rgba(99,102,241,0.26),transparent_60%),radial-gradient(900px_circle_at_85%_20%,rgba(236,72,153,0.20),transparent_55%),radial-gradient(900px_circle_at_50%_90%,rgba(34,197,94,0.14),transparent_55%)]" />
-      <div className="pointer-events-none absolute inset-0 opacity-30 [background-image:radial-gradient(rgba(148,163,184,0.25)_1px,transparent_1px)] [background-size:24px_24px]" />
+      <div className="pointer-events-none absolute inset-0 opacity-30 bg-[radial-gradient(rgba(148,163,184,0.25)_1px,transparent_1px)] bg-size-[24px_24px]" />
 
       <div className="relative mx-auto flex min-h-screen max-w-3xl flex-col px-4 py-12">
         <div className="flex flex-1 items-center">
           <div className="w-full rounded-3xl bg-white/10 p-8 text-center text-slate-100 shadow-[0_24px_80px_-50px_rgba(0,0,0,0.7)] ring-1 ring-white/15 backdrop-blur-xl sm:p-10">
             <h1 className="text-4xl font-bold sm:text-5xl">
-              <span className="bg-gradient-to-r from-indigo-200 via-white to-fuchsia-200 bg-clip-text text-transparent">
+              <span className="bg-linear-to-r from-indigo-200 via-white to-fuchsia-200 bg-clip-text text-transparent">
                 Control de Nómina
               </span>
               <span className="block text-base font-medium text-slate-300 sm:text-lg">by @andresaoe</span>
@@ -35,7 +35,7 @@ export default function WelcomePage() {
             <div className="mt-10">
               <Link
                 to="/auth"
-                className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:from-indigo-400 hover:to-fuchsia-400 focus:outline-none focus:ring-2 focus:ring-white/30"
+                className="inline-flex items-center justify-center rounded-xl bg-linear-to-r from-indigo-500 to-fuchsia-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:from-indigo-400 hover:to-fuchsia-400 focus:outline-none focus:ring-2 focus:ring-white/30"
               >
                 Iniciar
               </Link>

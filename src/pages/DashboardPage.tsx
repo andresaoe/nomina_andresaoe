@@ -1532,19 +1532,19 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
                               Devengos adicionales
                             </div>
                             {earningsDetail.salary.map((item) => (
-                              <div key={item.id} className="flex items-center justify-between gap-3 text-sm">
-                                <span className="text-slate-700">
+                              <div key={item.id} className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                <span className="min-w-0 wrap-break-word text-slate-700">
                                   {item.label} <span className="text-slate-500">(Salarial)</span>
                                 </span>
-                                <span className="text-slate-950">{formatCop(item.amountCop)}</span>
+                                <span className="shrink-0 text-slate-950">{formatCop(item.amountCop)}</span>
                               </div>
                             ))}
                             {earningsDetail.nonSalary.map((item) => (
-                              <div key={item.id} className="flex items-center justify-between gap-3 text-sm">
-                                <span className="text-slate-700">
+                              <div key={item.id} className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                <span className="min-w-0 wrap-break-word text-slate-700">
                                   {item.label} <span className="text-slate-500">(No salarial)</span>
                                 </span>
-                                <span className="text-slate-950">{formatCop(item.amountCop)}</span>
+                                <span className="shrink-0 text-slate-950">{formatCop(item.amountCop)}</span>
                               </div>
                             ))}
                           </div>
@@ -1556,9 +1556,9 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
                               Deducciones adicionales
                             </div>
                             {deductionDetail.map((item) => (
-                              <div key={item.id} className="flex items-center justify-between gap-3 text-sm">
-                                <span className="text-slate-700">{item.label}</span>
-                                <span className="text-slate-950">{formatCop(item.amountCop)}</span>
+                              <div key={item.id} className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                <span className="min-w-0 wrap-break-word text-slate-700">{item.label}</span>
+                                <span className="shrink-0 text-slate-950">{formatCop(item.amountCop)}</span>
                               </div>
                             ))}
                           </div>
@@ -1661,7 +1661,7 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
             <div className="grid gap-6">
               {preview ? (
                 <div className={cardClass}>
-                  <div className="flex items-center justify-between gap-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                     <div className="text-base font-semibold text-slate-950">Previsualización</div>
                     <div className="text-sm text-slate-600">
                       Total: {formatCop(preview.reduce((acc, p) => acc + p.breakdown.totalPayCop, 0))}
@@ -1669,9 +1669,12 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
                   </div>
                   <div className="mt-4 grid gap-2">
                     {preview.slice(0, 20).map((p) => (
-                      <div key={`${p.dateISO}-${p.shift}-${p.novelty}`} className="flex items-center justify-between gap-3 border-t border-slate-200 pt-2 text-sm">
-                        <div className="flex flex-wrap items-center gap-2 text-slate-700">
-                          <span>
+                      <div
+                        key={`${p.dateISO}-${p.shift}-${p.novelty}`}
+                        className="flex flex-col gap-2 border-t border-slate-200 pt-2 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                      >
+                        <div className="flex min-w-0 flex-wrap items-center gap-2 text-slate-700">
+                          <span className="wrap-break-word">
                             {p.dateISO} · {shiftOptions.find((s) => s.value === p.shift)?.label}
                           </span>
                           {(() => {
@@ -1683,7 +1686,7 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
                           ) : null}
                         </div>
                         <span
-                          className="rounded-full border px-3 py-1 text-xs text-slate-900"
+                          className="w-fit rounded-full border px-3 py-1 text-xs text-slate-900 sm:shrink-0 sm:self-center"
                           style={{ borderColor: noveltyTint(p.novelty) }}
                         >
                           {formatCop(p.breakdown.totalPayCop)}
@@ -1736,7 +1739,10 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
                 ) : (
                   <div className="mt-4 grid gap-2">
                     {(savedFiltered ?? []).map((row) => (
-                      <div key={row.id} className="flex items-start justify-between gap-3 border-t border-slate-200 pt-2 text-sm">
+                      <div
+                        key={row.id}
+                        className="flex flex-col gap-3 border-t border-slate-200 pt-2 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-3"
+                      >
                         <div className="min-w-0">
                           <div className="truncate text-slate-700">
                             {row.work_date} · {shiftOptions.find((s) => s.value === row.shift)?.label}
@@ -1752,7 +1758,7 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
                           </div>
                           <div className="mt-1 text-xs text-slate-500">{noveltyLabel(row.novelty)}</div>
                         </div>
-                        <div className="flex shrink-0 items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
                           <span
                             className="rounded-full border px-3 py-1 text-xs text-slate-900"
                             style={{ borderColor: noveltyTint(row.novelty) }}
@@ -1795,8 +1801,9 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
             </div>
 
             {editingRowId ? (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-                <div className="w-full max-w-lg rounded-3xl bg-white p-6 ring-1 ring-slate-200">
+              <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/40 p-4">
+                <div className="mx-auto flex min-h-full w-full max-w-lg items-start justify-center sm:items-center">
+                  <div className="w-full max-w-lg rounded-3xl bg-white p-6 ring-1 ring-slate-200 sm:max-h-[calc(100vh-3rem)] sm:overflow-y-auto">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <div className="text-base font-semibold text-slate-950">Editar turno</div>
@@ -1877,12 +1884,14 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
                     </div>
                   </div>
                 </div>
+                </div>
               </div>
             ) : null}
 
             {deletingRowId ? (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-                <div className="w-full max-w-md rounded-3xl bg-white p-6 ring-1 ring-slate-200">
+              <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/40 p-4">
+                <div className="mx-auto flex min-h-full w-full max-w-md items-start justify-center sm:items-center">
+                  <div className="w-full max-w-md rounded-3xl bg-white p-6 ring-1 ring-slate-200 sm:max-h-[calc(100vh-3rem)] sm:overflow-y-auto">
                   <div className="text-base font-semibold text-slate-950">Eliminar turno</div>
                   <div className="mt-2 text-sm text-slate-600">Esta acción no se puede deshacer.</div>
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -1898,6 +1907,7 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
                       {savingEdit ? 'Eliminando…' : 'Eliminar'}
                     </button>
                   </div>
+                </div>
                 </div>
               </div>
             ) : null}
