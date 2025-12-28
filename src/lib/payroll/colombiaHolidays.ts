@@ -68,9 +68,9 @@ export function getColombiaHolidaySet(year: number) {
   const ascension = addDays(easter, 43)
   const corpusChristi = addDays(easter, 64)
   const sacredHeart = addDays(easter, 71)
-  set.add(iso(ascension))
-  set.add(iso(corpusChristi))
-  set.add(iso(sacredHeart))
+  set.add(iso(emilianiMoveToMonday(ascension)))
+  set.add(iso(emilianiMoveToMonday(corpusChristi)))
+  set.add(iso(emilianiMoveToMonday(sacredHeart)))
 
   cacheByYear.set(year, set)
   return set

@@ -59,4 +59,25 @@ describe('payrollCalculator', () => {
     expect(calc?.breakdown.overtimeSundayOrHolidayDay).toBe(2)
     expect(calc?.breakdown.overtimeHoursTotal).toBe(2)
   })
+
+  it('marca horas festivas (Ascensión trasladada a lunes) en turno adicional', () => {
+    const hourlyRate = 1000
+    const [calc] = calculateShifts(['2025-06-02'], 'adicional', 'normal', hourlyRate, 44, {
+      startTimeHHmm: '10:00',
+      endTimeHHmm: '12:00',
+    })
+    expect(calc?.breakdown.overtimeSundayOrHolidayDay).toBe(2)
+    expect(calc?.breakdown.overtimeHoursTotal).toBe(2)
+  })
+
+  it('separa horas diurnas/nocturnas en turno adicional según el rango', () => {
+    const hourlyRate = 1000
+    const [calc] = calculateShifts(['2025-12-26'], 'adicional', 'normal', hourlyRate, 44, {
+      startTimeHHmm: '18:00',
+      endTimeHHmm: '20:00',
+    })
+    expect(calc?.breakdown.overtimeDay).toBe(1)
+    expect(calc?.breakdown.overtimeNight).toBe(1)
+    expect(calc?.breakdown.overtimeHoursTotal).toBe(2)
+  })
 })
