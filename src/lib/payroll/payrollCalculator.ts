@@ -2,6 +2,11 @@ import { addDays, addHours, format, parseISO, startOfDay } from 'date-fns'
 import { isColombiaHoliday } from './colombiaHolidays'
 import type { NoveltyType, ShiftCalcBreakdown, ShiftCalculation, ShiftType } from './types'
 
+const NOCTURNAL_19_START_MS = parseISO('2025-12-25').getTime()
+const SUNDAY_HOLIDAY_80_START_MS = parseISO('2025-07-01').getTime()
+const SUNDAY_HOLIDAY_90_START_MS = parseISO('2026-07-01').getTime()
+const SUNDAY_HOLIDAY_100_START_MS = parseISO('2027-07-01').getTime()
+
 export function formatCop(value: number) {
   return new Intl.NumberFormat('es-CO', {
     style: 'currency',
@@ -28,8 +33,7 @@ function isSundayOrHoliday(date: Date) {
 }
 
 function nocturnalStartHour(date: Date) {
-  const threshold = parseISO('2025-12-25')
-  return startOfDay(date).getTime() >= threshold.getTime() ? 19 : 21
+  return startOfDay(date).getTime() >= NOCTURNAL_19_START_MS ? 19 : 21
 }
 
 function isNight(instant: Date) {
@@ -103,7 +107,15 @@ function weekStartISO(date: Date) {
   return format(addDays(d, -diffToMonday), 'yyyy-MM-dd')
 }
 
-function premiumPercentage(isOvertime: boolean, isNightHour: boolean, isSundayHolidayHour: boolean) {
+function sundayOrHolidaySurchargePct(date: Date) {
+  const t = startOfDay(date).getTime()
+  if (t >= SUNDAY_HOLIDAY_100_START_MS) return 1.0
+  if (t >= SUNDAY_HOLIDAY_90_START_MS) return 0.9
+  if (t >= SUNDAY_HOLIDAY_80_START_MS) return 0.8
+  return 0.75
+}
+
+function premiumPercentage(at: Date, isOvertime: boolean, isNightHour: boolean, isSundayHolidayHour: boolean) {
   if (isOvertime) {
     if (isSundayHolidayHour && isNightHour) return 1.5
     if (isSundayHolidayHour) return 1.0
@@ -111,8 +123,8 @@ function premiumPercentage(isOvertime: boolean, isNightHour: boolean, isSundayHo
     return 0.25
   }
 
-  if (isSundayHolidayHour && isNightHour) return 1.1
-  if (isSundayHolidayHour) return 0.75
+  if (isSundayHolidayHour && isNightHour) return sundayOrHolidaySurchargePct(at) + 0.35
+  if (isSundayHolidayHour) return sundayOrHolidaySurchargePct(at)
   if (isNightHour) return 0.35
   return 0
 }
@@ -190,7 +202,7 @@ export function calculateShifts(
 
         const night = isNight(t)
         const sundayOrHoliday = isSundayOrHoliday(t)
-        const premium = premiumPercentage(true, night, sundayOrHoliday)
+        const premium = premiumPercentage(t, true, night, sundayOrHoliday)
 
         baseSum += hourlyRateCop * sliceHours
         premiumSum += hourlyRateCop * premium * sliceHours
@@ -275,7 +287,7 @@ export function calculateShifts(
       const sundayOrHoliday = isSundayOrHoliday(t)
       const isOvertime = weekUsed >= weeklyOrdinaryLimit
 
-      const premium = premiumPercentage(isOvertime, night, sundayOrHoliday)
+      const premium = premiumPercentage(t, isOvertime, night, sundayOrHoliday)
       baseSum += hourlyRateCop
       premiumSum += hourlyRateCop * premium
 
@@ -381,7 +393,7 @@ export function calculateShiftsMerged(
     const overtime = weekUsed >= weeklyOrdinaryLimit
     if (!overtime) weekOrdinaryUsed.set(weekKey, weekUsed + 1)
 
-    const premium = premiumPercentage(overtime, e.night, e.sundayOrHoliday)
+    const premium = premiumPercentage(e.time, overtime, e.night, e.sundayOrHoliday)
     const a =
       accum.get(e.itemId) ??
       (() => {

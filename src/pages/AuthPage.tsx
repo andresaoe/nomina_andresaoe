@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getSupabase } from '../lib/supabaseClient'
+import { getSupabase, isSupabaseConfigured, onSupabaseConfigChange, setSupabaseConfig } from '../lib/supabaseClient'
 import { useSession } from '../hooks/useSession'
 import { readJson, writeJson } from '../lib/storage'
 
@@ -17,18 +17,39 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false)
   const [resending, setResending] = useState(false)
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(() => readJson<string>(PENDING_VERIFY_EMAIL_KEY))
+  const [supabaseReady, setSupabaseReady] = useState(() => isSupabaseConfigured())
+  const [supabaseUrlInput, setSupabaseUrlInput] = useState('')
+  const [supabaseAnonKeyInput, setSupabaseAnonKeyInput] = useState('')
 
   const canLogin = useMemo(() => email.includes('@') && password.length >= 8, [email, password])
-  const supabaseReady = Boolean(getSupabase())
 
   useEffect(() => {
     if (session.status === 'signed_in') navigate('/dashboard', { replace: true })
   }, [navigate, session.status])
 
   useEffect(() => {
+    setSupabaseReady(isSupabaseConfigured())
+    return onSupabaseConfigChange(() => setSupabaseReady(isSupabaseConfigured()))
+  }, [])
+
+  useEffect(() => {
     if (pendingVerificationEmail) writeJson(PENDING_VERIFY_EMAIL_KEY, pendingVerificationEmail)
     else localStorage.removeItem(PENDING_VERIFY_EMAIL_KEY)
   }, [pendingVerificationEmail])
+
+  function onSaveSupabaseConfig(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setInfo(null)
+    try {
+      setSupabaseConfig({ url: supabaseUrlInput, anonKey: supabaseAnonKeyInput })
+      setInfo('Configuración guardada. Ya puedes iniciar sesión.')
+      setSupabaseUrlInput('')
+      setSupabaseAnonKeyInput('')
+    } catch {
+      setError('No se pudo guardar la configuración de Supabase.')
+    }
+  }
 
   async function onResendVerificationEmail(targetEmail: string) {
     setError(null)
@@ -108,8 +129,43 @@ export default function AuthPage() {
               Inicia sesión para usar el dashboard de turnos y cálculo automático.
             </p>
             {!supabaseReady ? (
-              <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
-                Servicio no disponible. Contacta al administrador.
+              <div className="mt-4 grid gap-3">
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+                  Servicio no disponible. Falta configurar Supabase.
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+                  <div className="text-sm font-medium text-slate-900">Configurar Supabase</div>
+                  <div className="mt-1 text-sm text-slate-600">
+                    Si publicaste en Vercel, asegúrate de configurar las variables VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY. Como alternativa, puedes pegarlas aquí (se guardan en este navegador).
+                  </div>
+                  <form className="mt-4 grid gap-3" onSubmit={onSaveSupabaseConfig}>
+                    <label className="text-sm text-slate-700">
+                      URL de Supabase
+                      <input
+                        className={inputClass}
+                        value={supabaseUrlInput}
+                        onChange={(e) => setSupabaseUrlInput(e.target.value)}
+                        placeholder="https://xxxx.supabase.co"
+                        autoComplete="off"
+                      />
+                    </label>
+                    <label className="text-sm text-slate-700">
+                      ANON key
+                      <input
+                        className={inputClass}
+                        value={supabaseAnonKeyInput}
+                        onChange={(e) => setSupabaseAnonKeyInput(e.target.value)}
+                        placeholder="eyJhbGciOi..."
+                        autoComplete="off"
+                      />
+                    </label>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <button type="submit" className={btnPrimary} disabled={!supabaseUrlInput.trim() || !supabaseAnonKeyInput.trim()}>
+                        Guardar
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
             ) : null}
 

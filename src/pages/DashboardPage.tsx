@@ -27,7 +27,7 @@ import {
 } from '../lib/payroll/payrollCalculator'
 import { isColombiaHoliday } from '../lib/payroll/colombiaHolidays'
 import type { NoveltyType, ShiftCalcBreakdown, ShiftCalculation, ShiftType } from '../lib/payroll/types'
-import type { DeductionItem, EarningItem } from '../lib/payroll/payrollCalculator'
+import type { DeductionItem, EarningItem, MonthSummary } from '../lib/payroll/payrollCalculator'
 
 type SavedRow = {
   id: string
@@ -118,6 +118,28 @@ function noveltyRequiresRange(novelty: NoveltyType) {
   return rangeNovelties.includes(novelty)
 }
 
+function buildMonthPrefix(year: number, month1: number) {
+  return `${year}-${String(month1).padStart(2, '0')}`
+}
+
+function monthDateFromPrefix(prefixYYYYMM: string) {
+  const [yStr, mStr] = prefixYYYYMM.split('-')
+  const y = Number(yStr)
+  const m = Number(mStr)
+  return new Date(y, m - 1, 1)
+}
+
+function addMonthsToPrefix(prefixYYYYMM: string, delta: number) {
+  const base = monthDateFromPrefix(prefixYYYYMM)
+  const d = new Date(base)
+  d.setMonth(d.getMonth() + delta)
+  return buildMonthPrefix(d.getFullYear(), d.getMonth() + 1)
+}
+
+function escapeHtml(value: string) {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate()
   const session = useSession()
@@ -149,6 +171,7 @@ export default function DashboardPage() {
 
   const [preview, setPreview] = useState<ShiftCalculation[] | null>(null)
   const [saved, setSaved] = useState<SavedRow[] | null>(null)
+  const [savedSearch, setSavedSearch] = useState('')
   const [monthRows, setMonthRows] = useState<MonthRow[] | null>(null)
   const [editingRowId, setEditingRowId] = useState<string | null>(null)
   const [editWorkDateISO, setEditWorkDateISO] = useState(todayISO())
@@ -166,8 +189,13 @@ export default function DashboardPage() {
   const [rowsLoadError, setRowsLoadError] = useState<string | null>(null)
   const [monthLoadError, setMonthLoadError] = useState<string | null>(null)
 
-  const [activeNavId, setActiveNavId] = useState<'resumen' | 'turnos' | 'config' | 'datos'>('resumen')
+  type NavId = 'resumen' | 'turnos' | 'reportes' | 'config' | 'datos'
+  const [activeNavId, setActiveNavId] = useState<NavId>('resumen')
   const [pendingCount, setPendingCount] = useState(0)
+  const [reportsLoading, setReportsLoading] = useState(false)
+  const [reportsError, setReportsError] = useState<string | null>(null)
+  const [sixMonthSummaries, setSixMonthSummaries] = useState<MonthSummary[] | null>(null)
+  const [yearSummaries, setYearSummaries] = useState<MonthSummary[] | null>(null)
 
   const requiresRange = noveltyRequiresRange(novelty)
   const currentUserEmail = session.status === 'signed_in' ? (session.session.user.email ?? '') : ''
@@ -553,6 +581,290 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
     transportCapSmmlv,
   ])
 
+  const reportYear = useMemo(() => Number(selectedMonthPrefix.slice(0, 4)), [selectedMonthPrefix])
+
+  useEffect(() => {
+    async function loadReports() {
+      if (activeNavId !== 'reportes') return
+      if (!currentUserId) return
+      if (!hourlyRate) return
+
+      setReportsLoading(true)
+      setReportsError(null)
+      try {
+        const configBase = {
+          baseSalaryCop: baseSalaryCop ?? 0,
+          smmlvCop: smmlvCop ?? 0,
+          transportAllowanceCop: transportAllowanceCop ?? 0,
+          transportSalaryCapSmmlv: transportCapSmmlv,
+          earningsItems,
+          deductionItems,
+          applyStandardDeductions,
+          healthPct: healthPct / 100,
+          pensionPct: pensionPct / 100,
+          applySolidarityFund,
+          ibcMinSmmlv,
+          ibcMaxSmmlv,
+        }
+
+        const sixMonths = Array.from({ length: 6 }, (_, i) => addMonthsToPrefix(selectedMonthPrefix, -(5 - i)))
+        const six: MonthSummary[] = []
+        for (const monthISO of sixMonths) {
+          const { start, end } = monthBounds(monthISO)
+          const local = await listLocalShiftEntriesForRange(currentUserId, start, end)
+          const entries = local.map((r) => ({
+            workDateISO: r.work_date,
+            novelty: r.novelty,
+            totalPayCop: r.total_pay_cop,
+            breakdown: r.breakdown,
+          }))
+          six.push(
+            summarizeMonth(entries, {
+              ...configBase,
+              monthISO,
+            }),
+          )
+        }
+        setSixMonthSummaries(six)
+
+        const yearMonths = Array.from({ length: 12 }, (_, i) => buildMonthPrefix(reportYear, i + 1))
+        const year: MonthSummary[] = []
+        for (const monthISO of yearMonths) {
+          const { start, end } = monthBounds(monthISO)
+          const local = await listLocalShiftEntriesForRange(currentUserId, start, end)
+          const entries = local.map((r) => ({
+            workDateISO: r.work_date,
+            novelty: r.novelty,
+            totalPayCop: r.total_pay_cop,
+            breakdown: r.breakdown,
+          }))
+          year.push(
+            summarizeMonth(entries, {
+              ...configBase,
+              monthISO,
+            }),
+          )
+        }
+        setYearSummaries(year)
+      } catch (err) {
+        setSixMonthSummaries(null)
+        setYearSummaries(null)
+        setReportsError(err instanceof Error ? err.message : 'No se pudieron generar los reportes.')
+      } finally {
+        setReportsLoading(false)
+      }
+    }
+    loadReports()
+  }, [
+    activeNavId,
+    applySolidarityFund,
+    applyStandardDeductions,
+    baseSalaryCop,
+    currentUserId,
+    deductionItems,
+    earningsItems,
+    healthPct,
+    hourlyRate,
+    ibcMaxSmmlv,
+    ibcMinSmmlv,
+    pensionPct,
+    reportYear,
+    selectedMonthPrefix,
+    smmlvCop,
+    transportAllowanceCop,
+    transportCapSmmlv,
+  ])
+
+  const sixMonthAvg = useMemo(() => {
+    const months = sixMonthSummaries ?? []
+    if (!months.length) return null
+    const sumNet = months.reduce((acc, m) => acc + (m.netPayCop || 0), 0)
+    const sumGross = months.reduce((acc, m) => acc + (m.grossPayCop || 0), 0)
+    const sumShifts = months.reduce((acc, m) => acc + (m.shiftsCount || 0), 0)
+    return {
+      avgNetCop: roundCop(sumNet / months.length),
+      avgGrossCop: roundCop(sumGross / months.length),
+      avgShifts: Number((sumShifts / months.length).toFixed(2)),
+    }
+  }, [sixMonthSummaries])
+
+  const sixMonthNetPoints = useMemo(() => {
+    const months = sixMonthSummaries ?? []
+    return months.map((m) => ({ label: m.monthISO.slice(2), value: m.netPayCop || 0 }))
+  }, [sixMonthSummaries])
+
+  const yearTotals = useMemo(() => {
+    const months = yearSummaries ?? []
+    if (!months.length) return null
+    return {
+      netPayCop: roundCop(months.reduce((acc, m) => acc + (m.netPayCop || 0), 0)),
+      grossPayCop: roundCop(months.reduce((acc, m) => acc + (m.grossPayCop || 0), 0)),
+      totalDeductionsCop: roundCop(months.reduce((acc, m) => acc + (m.totalDeductionsCop || 0), 0)),
+      shiftsCount: months.reduce((acc, m) => acc + (m.shiftsCount || 0), 0),
+    }
+  }, [yearSummaries])
+
+  const yearNetPoints = useMemo(() => {
+    const months = yearSummaries ?? []
+    return months.map((m) => ({ label: m.monthISO.slice(5), value: m.netPayCop || 0 }))
+  }, [yearSummaries])
+
+  const openPrintWindow = useCallback(
+    (title: string, bodyHtml: string) => {
+      const w = window.open('', '_blank', 'noopener,noreferrer')
+      if (!w) {
+        setError('No se pudo abrir la ventana para imprimir. Revisa el bloqueador de popups.')
+        return
+      }
+      w.document.open()
+      w.document.write(`<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(title)}</title>
+    <style>
+      :root { color-scheme: light; }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; color: #0f172a; }
+      h1 { font-size: 18px; margin: 0 0 6px; }
+      .sub { font-size: 12px; color: #475569; margin: 0 0 16px; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+      .card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; }
+      .row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; padding: 4px 0; }
+      .row b { font-weight: 600; }
+      table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      th, td { border-bottom: 1px solid #e2e8f0; text-align: left; padding: 8px 6px; font-size: 12px; vertical-align: top; }
+      th { font-size: 11px; text-transform: uppercase; color: #475569; }
+      .muted { color: #64748b; }
+      .right { text-align: right; }
+      @media print { body { margin: 0; } .no-print { display: none; } }
+    </style>
+  </head>
+  <body>
+    ${bodyHtml}
+    <div class="no-print" style="margin-top:16px; font-size:12px; color:#64748b;">
+      Consejo: en el diálogo de impresión selecciona “Guardar como PDF”.
+    </div>
+  </body>
+</html>`)
+      w.document.close()
+      w.focus()
+      w.print()
+    },
+    [setError],
+  )
+
+  const onDownloadMonthlyPdf = useCallback(() => {
+    if (!monthSummary) {
+      setError('No hay datos del mes para generar la planilla.')
+      return
+    }
+    const rows = monthEntries.slice().sort((a, b) => (a.workDateISO < b.workDateISO ? -1 : a.workDateISO > b.workDateISO ? 1 : 0))
+    const detailsRows = rows
+      .map((r) => {
+        const badge = dayBadge(r.workDateISO, r.breakdown)
+        const b = r.breakdown
+        const hours =
+          (b.hoursDay || 0) +
+          (b.hoursNight || 0) +
+          (b.hoursSundayOrHolidayDay || 0) +
+          (b.hoursSundayOrHolidayNight || 0) +
+          (b.overtimeHoursTotal || 0)
+        return `<tr>
+  <td>${escapeHtml(r.workDateISO)}<div class="muted">${escapeHtml(badge.label)} · ${escapeHtml(noveltyLabel(r.novelty))}</div></td>
+  <td class="right">${escapeHtml(String(hours))}</td>
+  <td class="right">${escapeHtml(formatCop(r.totalPayCop || 0))}</td>
+</tr>`
+      })
+      .join('')
+
+    const body = `
+<h1>Planilla de pago mensual · ${escapeHtml(selectedMonthPrefix)}</h1>
+<p class="sub">${escapeHtml(currentUserEmail)}</p>
+<div class="grid">
+  <div class="card">
+    <div class="row"><span>Total turnos</span><b>${escapeHtml(String(monthSummary.shiftsCount))}</b></div>
+    <div class="row"><span>Días únicos</span><b>${escapeHtml(String(monthSummary.uniqueDays))}</b></div>
+    <div class="row"><span>Devengado (turnos)</span><b>${escapeHtml(formatCop(monthSummary.shiftPayCop))}</b></div>
+    <div class="row"><span>Auxilio transporte</span><b>${escapeHtml(formatCop(monthSummary.transportAllowanceCop))}</b></div>
+    <div class="row"><span>Bruto</span><b>${escapeHtml(formatCop(monthSummary.grossPayCop))}</b></div>
+  </div>
+  <div class="card">
+    <div class="row"><span>Salud</span><b>${escapeHtml(formatCop(monthSummary.healthCop))}</b></div>
+    <div class="row"><span>Pensión</span><b>${escapeHtml(formatCop(monthSummary.pensionCop))}</b></div>
+    <div class="row"><span>Solidaridad</span><b>${escapeHtml(formatCop(monthSummary.solidarityFundCop))}</b></div>
+    <div class="row"><span>Otras deducciones</span><b>${escapeHtml(formatCop(monthSummary.otherDeductionsCop))}</b></div>
+    <div class="row"><span>Deducciones</span><b>${escapeHtml(formatCop(monthSummary.totalDeductionsCop))}</b></div>
+    <div class="row"><span>Neto a pagar</span><b>${escapeHtml(formatCop(monthSummary.netPayCop))}</b></div>
+  </div>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>Fecha</th>
+      <th class="right">Horas</th>
+      <th class="right">Total</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${detailsRows || '<tr><td colspan="3" class="muted">Sin registros en el mes.</td></tr>'}
+  </tbody>
+</table>
+`
+    openPrintWindow(`Planilla ${selectedMonthPrefix}`, body)
+  }, [currentUserEmail, monthEntries, monthSummary, openPrintWindow, selectedMonthPrefix])
+
+  const onDownloadAnnualPdf = useCallback(() => {
+    const months = yearSummaries ?? []
+    if (!months.length || !yearTotals) {
+      setError('No hay datos suficientes para el reporte anual.')
+      return
+    }
+    const rows = months
+      .map(
+        (m) => `<tr>
+  <td>${escapeHtml(m.monthISO)}</td>
+  <td class="right">${escapeHtml(String(m.shiftsCount || 0))}</td>
+  <td class="right">${escapeHtml(formatCop(m.grossPayCop || 0))}</td>
+  <td class="right">${escapeHtml(formatCop(m.totalDeductionsCop || 0))}</td>
+  <td class="right">${escapeHtml(formatCop(m.netPayCop || 0))}</td>
+</tr>`,
+      )
+      .join('')
+
+    const body = `
+<h1>Reporte anual de nómina · ${escapeHtml(String(reportYear))}</h1>
+<p class="sub">${escapeHtml(currentUserEmail)}</p>
+<div class="grid">
+  <div class="card">
+    <div class="row"><span>Turnos</span><b>${escapeHtml(String(yearTotals.shiftsCount))}</b></div>
+    <div class="row"><span>Bruto</span><b>${escapeHtml(formatCop(yearTotals.grossPayCop))}</b></div>
+    <div class="row"><span>Deducciones</span><b>${escapeHtml(formatCop(yearTotals.totalDeductionsCop))}</b></div>
+    <div class="row"><span>Neto</span><b>${escapeHtml(formatCop(yearTotals.netPayCop))}</b></div>
+  </div>
+  <div class="card">
+    <div class="row"><span>Periodo</span><b>${escapeHtml(String(reportYear))}-01 a ${escapeHtml(String(reportYear))}-12</b></div>
+    <div class="row"><span>Generado</span><b>${escapeHtml(new Date().toISOString().slice(0, 10))}</b></div>
+  </div>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>Mes</th>
+      <th class="right">Turnos</th>
+      <th class="right">Bruto</th>
+      <th class="right">Deducciones</th>
+      <th class="right">Neto</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${rows}
+  </tbody>
+</table>
+`
+    openPrintWindow(`Reporte anual ${reportYear}`, body)
+  }, [currentUserEmail, openPrintWindow, reportYear, yearSummaries, yearTotals])
+
   const calculateForRange = useCallback(
     async (dates: string[]) => {
       if (!hourlyRate) return []
@@ -562,8 +874,7 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
           : null
 
       if (shift === 'adicional') {
-        if (session.status !== 'signed_in') return calculateShifts(dates, shift, novelty, hourlyRate, 44, additionalTimeRange)
-        if (!currentUserId) return calculateShifts(dates, shift, novelty, hourlyRate, 44, additionalTimeRange)
+        return calculateShifts(dates, shift, novelty, hourlyRate, 44, additionalTimeRange)
       }
 
       if (session.status !== 'signed_in') return calculateShifts(dates, shift, novelty, hourlyRate)
@@ -970,12 +1281,60 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
 
   const hasOvertime = (breakdown?: ShiftCalcBreakdown) => (breakdown?.overtimeHoursTotal ?? 0) > 0
 
+  const normalizeSearchText = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+
+  const savedRowSearchText = (row: SavedRow) => {
+    const badge = dayBadge(row.work_date, row.breakdown)
+    const shiftLabel = shiftOptions.find((s) => s.value === row.shift)?.label ?? row.shift
+    const novelty = noveltyLabel(row.novelty)
+
+    const b = row.breakdown
+    const nightHours =
+      (b?.hoursNight ?? 0) +
+      (b?.hoursSundayOrHolidayNight ?? 0) +
+      (b?.overtimeNight ?? 0) +
+      (b?.overtimeSundayOrHolidayNight ?? 0)
+    const dayHours =
+      (b?.hoursDay ?? 0) +
+      (b?.hoursSundayOrHolidayDay ?? 0) +
+      (b?.overtimeDay ?? 0) +
+      (b?.overtimeSundayOrHolidayDay ?? 0)
+    const extra = hasOvertime(b) || row.shift === 'adicional'
+
+    const tags = [
+      badge.label === 'Festivo' ? 'festivo festivos' : '',
+      badge.label === 'Domingo' ? 'domingo domingos' : '',
+      nightHours > 0 ? 'nocturno nocturna nocturnas' : '',
+      dayHours > 0 ? 'diurno diurna diurnas' : '',
+      extra ? 'extra extras horas extra' : '',
+      row.shift === 'adicional' ? 'adicional adicionales' : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+
+    return normalizeSearchText([row.work_date, shiftLabel, row.shift, novelty, row.novelty, badge.label, tags].join(' '))
+  }
+
+  const savedFiltered =
+    saved && savedSearch.trim()
+      ? saved.filter((row) => {
+          const haystack = savedRowSearchText(row)
+          const tokens = normalizeSearchText(savedSearch).split(/\s+/).filter(Boolean)
+          return tokens.every((t) => haystack.includes(t))
+        })
+      : saved
+
   const navItems = [
     { id: 'resumen', label: 'Resumen' },
     { id: 'turnos', label: 'Turnos' },
+    { id: 'reportes', label: 'Reportes' },
     { id: 'config', label: 'Configuración' },
-    ...(isAdmin ? [{ id: 'datos', label: 'Datos y SQL' }] : []),
-  ]
+    ...(isAdmin ? [{ id: 'datos' as const, label: 'Datos y SQL' }] : []),
+  ] satisfies Array<{ id: NavId; label: string }>
 
   const inputClass =
     'mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-950/20'
@@ -1002,7 +1361,7 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
       activeNavId={activeNavId}
       onSelectNav={(id) => {
         if (!isAdmin && id === 'datos') return
-        setActiveNavId(id as 'resumen' | 'turnos' | 'config' | 'datos')
+        setActiveNavId(id as NavId)
       }}
       rightSlot={
         <>
@@ -1326,6 +1685,22 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
 
               <div className={cardClass}>
                 <div className="text-base font-semibold text-slate-950">Últimos turnos guardados</div>
+                <div className="mt-3">
+                  <label className="text-sm text-slate-700">
+                    Buscar
+                    <input
+                      className={inputClass}
+                      value={savedSearch}
+                      onChange={(e) => setSavedSearch(e.target.value)}
+                      placeholder="Fecha o palabras clave: festivos, domingos, nocturnas, adicional, extra…"
+                    />
+                  </label>
+                  {saved && savedSearch.trim() && savedFiltered ? (
+                    <div className="mt-2 text-xs text-slate-600">
+                      Mostrando {savedFiltered.length} de {saved.length}
+                    </div>
+                  ) : null}
+                </div>
                 {loadingRows ? (
                   <div className="mt-3 text-sm text-slate-600">Cargando…</div>
                 ) : !saved ? (
@@ -1344,9 +1719,11 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
                   </div>
                 ) : saved.length === 0 ? (
                   <div className="mt-3 text-sm text-slate-600">Aún no hay turnos guardados.</div>
+                ) : savedFiltered && savedFiltered.length === 0 ? (
+                  <div className="mt-3 text-sm text-slate-600">Sin resultados.</div>
                 ) : (
                   <div className="mt-4 grid gap-2">
-                    {saved.map((row) => (
+                    {(savedFiltered ?? []).map((row) => (
                       <div key={row.id} className="flex items-start justify-between gap-3 border-t border-slate-200 pt-2 text-sm">
                         <div className="min-w-0">
                           <div className="truncate text-slate-700">
@@ -1729,6 +2106,125 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
               <div className="mt-2 text-sm text-slate-600">Datos usados: dispositivo + nube</div>
               <div className="mt-4">
                 {!dailyPayPoints.length ? <div className="text-sm text-slate-600">Aún no hay datos.</div> : <SimpleBarChart points={dailyPayPoints} />}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {activeNavId === 'reportes' ? (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className={cardClass}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-base font-semibold text-slate-950">Planilla mensual</div>
+                  <div className="mt-1 text-sm text-slate-600">Resumen y planilla imprimible del mes seleccionado.</div>
+                </div>
+                <button type="button" className={btnPrimary} onClick={onDownloadMonthlyPdf} disabled={!monthSummary}>
+                  Descargar PDF
+                </button>
+              </div>
+
+              {!monthSummary ? (
+                <div className="mt-4 text-sm text-slate-600">Aún no hay datos del mes para generar la planilla.</div>
+              ) : (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-xs text-slate-600">Neto</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{formatCop(monthSummary.netPayCop || 0)}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-xs text-slate-600">Bruto</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{formatCop(monthSummary.grossPayCop || 0)}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <div className="text-xs text-slate-600">Turnos</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{monthSummary.shiftsCount}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <div className="text-xs text-slate-600">Días únicos</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{monthSummary.uniqueDays}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className={cardClass}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-base font-semibold text-slate-950">Promedio 6 meses</div>
+                  <div className="mt-1 text-sm text-slate-600">Tendencia del neto (últimos 6 meses).</div>
+                </div>
+                <div className="text-xs text-slate-500">{reportsLoading ? 'Cargando…' : null}</div>
+              </div>
+
+              {reportsError ? <div className="mt-4 text-sm text-rose-700">{reportsError}</div> : null}
+
+              {!sixMonthAvg ? (
+                <div className="mt-4 text-sm text-slate-600">Aún no hay datos suficientes para calcular el promedio.</div>
+              ) : (
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <div className="text-xs text-slate-600">Neto promedio</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{formatCop(sixMonthAvg.avgNetCop)}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <div className="text-xs text-slate-600">Bruto promedio</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{formatCop(sixMonthAvg.avgGrossCop)}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <div className="text-xs text-slate-600">Turnos promedio</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{sixMonthAvg.avgShifts}</div>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4">
+                {!sixMonthNetPoints.length ? (
+                  <div className="text-sm text-slate-600">Aún no hay datos.</div>
+                ) : (
+                  <SimpleBarChart points={sixMonthNetPoints} />
+                )}
+              </div>
+            </div>
+
+            <div className={cardClass}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-base font-semibold text-slate-950">Reporte anual</div>
+                  <div className="mt-1 text-sm text-slate-600">Acumulado de nómina del año {reportYear}.</div>
+                </div>
+                <button type="button" className={btnPrimary} onClick={onDownloadAnnualPdf} disabled={!yearTotals}>
+                  Descargar PDF
+                </button>
+              </div>
+
+              {reportsError ? <div className="mt-4 text-sm text-rose-700">{reportsError}</div> : null}
+
+              {!yearTotals ? (
+                <div className="mt-4 text-sm text-slate-600">Aún no hay datos suficientes para el reporte anual.</div>
+              ) : (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <div className="text-xs text-slate-600">Neto anual</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{formatCop(yearTotals.netPayCop)}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <div className="text-xs text-slate-600">Deducciones</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{formatCop(yearTotals.totalDeductionsCop)}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-xs text-slate-600">Bruto anual</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{formatCop(yearTotals.grossPayCop)}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="text-xs text-slate-600">Turnos</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{yearTotals.shiftsCount}</div>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4">
+                {!yearNetPoints.length ? <div className="text-sm text-slate-600">Aún no hay datos.</div> : <SimpleBarChart points={yearNetPoints} />}
               </div>
             </div>
           </div>

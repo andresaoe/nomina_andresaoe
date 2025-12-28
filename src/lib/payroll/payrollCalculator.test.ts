@@ -80,4 +80,37 @@ describe('payrollCalculator', () => {
     expect(calc?.breakdown.overtimeNight).toBe(1)
     expect(calc?.breakdown.overtimeHoursTotal).toBe(2)
   })
+
+  it('aplica recargo dom/fest 75% antes de 2025-07-01', () => {
+    const hourlyRate = 1000
+    const [calc] = calculateShifts(['2025-06-02'], 'tarde', 'normal', hourlyRate)
+    expect(calc?.breakdown.hoursSundayOrHolidayDay).toBe(8)
+    expect(calc?.breakdown.basePayCop).toBe(8000)
+    expect(calc?.breakdown.surchargePayCop).toBe(6000)
+    expect(calc?.breakdown.totalPayCop).toBe(14000)
+  })
+
+  it('aplica recargo dom/fest 80% desde 2025-07-01', () => {
+    const hourlyRate = 1000
+    const [calc] = calculateShifts(['2025-07-20'], 'tarde', 'normal', hourlyRate)
+    expect(calc?.breakdown.hoursSundayOrHolidayDay).toBe(8)
+    expect(calc?.breakdown.basePayCop).toBe(8000)
+    expect(calc?.breakdown.surchargePayCop).toBe(6400)
+    expect(calc?.breakdown.totalPayCop).toBe(14400)
+  })
+
+  it('aplica recargo dom/fest 90% desde 2026-07-01 y 100% desde 2027-07-01', () => {
+    const hourlyRate = 1000
+    const [calc90] = calculateShifts(['2026-07-20'], 'tarde', 'normal', hourlyRate)
+    expect(calc90?.breakdown.hoursSundayOrHolidayDay).toBe(6)
+    expect(calc90?.breakdown.hoursSundayOrHolidayNight).toBe(2)
+    expect(calc90?.breakdown.surchargePayCop).toBe(7900)
+    expect(calc90?.breakdown.totalPayCop).toBe(15900)
+
+    const [calc100] = calculateShifts(['2027-07-20'], 'tarde', 'normal', hourlyRate)
+    expect(calc100?.breakdown.hoursSundayOrHolidayDay).toBe(6)
+    expect(calc100?.breakdown.hoursSundayOrHolidayNight).toBe(2)
+    expect(calc100?.breakdown.surchargePayCop).toBe(8700)
+    expect(calc100?.breakdown.totalPayCop).toBe(16700)
+  })
 })
