@@ -246,6 +246,12 @@ using (auth.uid() = user_id);`,
     [],
   )
 
+  const copySupabaseSetupSql = useCallback(() => {
+    if (!navigator.clipboard) return
+    void navigator.clipboard.writeText(supabaseSetupSql)
+    setInfo('SQL copiado. Pégalo en Supabase → SQL Editor.')
+  }, [supabaseSetupSql])
+
   useEffect(() => {
     if (session.status !== 'signed_in') return
     const meta = session.session.user.user_metadata ?? {}
@@ -1324,10 +1330,7 @@ using (auth.uid() = user_id);`,
                       <button
                         type="button"
                         className={btnNeutral}
-                        onClick={() => {
-                          navigator.clipboard?.writeText(supabaseSetupSql)
-                          setInfo('SQL copiado. Pégalo en Supabase → SQL Editor.')
-                        }}
+                        onClick={copySupabaseSetupSql}
                         disabled={!navigator.clipboard}
                       >
                         Copiar SQL de la tabla
@@ -1740,10 +1743,7 @@ using (auth.uid() = user_id);`,
                 <button
                   type="button"
                   className={btnNeutral}
-                  onClick={() => {
-                    navigator.clipboard?.writeText(supabaseSetupSql)
-                    setInfo('SQL copiado. Pégalo en Supabase → SQL Editor.')
-                  }}
+                  onClick={copySupabaseSetupSql}
                   disabled={!navigator.clipboard}
                 >
                   Copiar SQL
