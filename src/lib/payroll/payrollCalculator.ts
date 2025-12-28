@@ -49,12 +49,44 @@ function shiftRange(dateISO: string, shift: ShiftType) {
   } else if (shift === 'tarde') {
     start.setHours(13, 0, 0, 0)
     end.setHours(21, 0, 0, 0)
-  } else {
+  } else if (shift === 'noche') {
     start.setHours(21, 0, 0, 0)
     end.setHours(5, 0, 0, 0)
     end.setDate(end.getDate() + 1)
+  } else {
+    start.setHours(0, 0, 0, 0)
+    end.setHours(0, 0, 0, 0)
   }
 
+  return { start, end }
+}
+
+type AdditionalTimeRange = {
+  startTimeHHmm: string
+  endTimeHHmm: string
+}
+
+function parseTimeHHmmToMinutes(value: string) {
+  const [hh, mm] = value.split(':')
+  const h = Number(hh)
+  const m = Number(mm)
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null
+  if (h < 0 || h > 23 || m < 0 || m > 59) return null
+  return h * 60 + m
+}
+
+function additionalRange(dateISO: string, range: AdditionalTimeRange | null | undefined) {
+  const base = parseISO(dateISO)
+  const start = new Date(base)
+  const end = new Date(base)
+
+  const startMinutes = parseTimeHHmmToMinutes(range?.startTimeHHmm ?? '')
+  const endMinutes = parseTimeHHmmToMinutes(range?.endTimeHHmm ?? '')
+  if (startMinutes === null || endMinutes === null) return null
+
+  start.setHours(Math.floor(startMinutes / 60), startMinutes % 60, 0, 0)
+  end.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0)
+  if (end.getTime() <= start.getTime()) end.setDate(end.getDate() + 1)
   return { start, end }
 }
 
@@ -91,14 +123,117 @@ export function calculateShifts(
   novelty: NoveltyType,
   hourlyRateCop: number,
   weeklyOrdinaryLimit = 44,
+  additionalTimeRange?: AdditionalTimeRange | null,
 ): ShiftCalculation[] {
   const weekOrdinaryUsed = new Map<string, number>()
 
   return dateISOs.map((dateISO) => {
-    const hoursTotal = 8
     const noveltyMult = noveltyMultiplier(novelty)
 
+    if (shift === 'adicional') {
+      if (novelty !== 'normal') {
+        const breakdown: ShiftCalcBreakdown = {
+          hoursTotal: 0,
+          hoursDay: 0,
+          hoursNight: 0,
+          hoursSundayOrHolidayDay: 0,
+          hoursSundayOrHolidayNight: 0,
+          overtimeHoursTotal: 0,
+          overtimeDay: 0,
+          overtimeNight: 0,
+          overtimeSundayOrHolidayDay: 0,
+          overtimeSundayOrHolidayNight: 0,
+          additionalStartTimeHHmm: additionalTimeRange?.startTimeHHmm,
+          additionalEndTimeHHmm: additionalTimeRange?.endTimeHHmm,
+          basePayCop: 0,
+          surchargePayCop: 0,
+          totalPayCop: 0,
+        }
+        return { dateISO, shift, novelty, breakdown }
+      }
+
+      const range = additionalRange(dateISO, additionalTimeRange)
+      if (!range) {
+        const breakdown: ShiftCalcBreakdown = {
+          hoursTotal: 0,
+          hoursDay: 0,
+          hoursNight: 0,
+          hoursSundayOrHolidayDay: 0,
+          hoursSundayOrHolidayNight: 0,
+          overtimeHoursTotal: 0,
+          overtimeDay: 0,
+          overtimeNight: 0,
+          overtimeSundayOrHolidayDay: 0,
+          overtimeSundayOrHolidayNight: 0,
+          additionalStartTimeHHmm: additionalTimeRange?.startTimeHHmm,
+          additionalEndTimeHHmm: additionalTimeRange?.endTimeHHmm,
+          basePayCop: 0,
+          surchargePayCop: 0,
+          totalPayCop: 0,
+        }
+        return { dateISO, shift, novelty, breakdown }
+      }
+
+      let overtimeDay = 0
+      let overtimeNight = 0
+      let overtimeSundayOrHolidayDay = 0
+      let overtimeSundayOrHolidayNight = 0
+
+      let baseSum = 0
+      let premiumSum = 0
+
+      const stepMinutes = 15
+      for (let t = new Date(range.start); t < range.end; t = addDays(t, 0)) {
+        const next = new Date(t.getTime() + stepMinutes * 60 * 1000)
+        const sliceEnd = next.getTime() > range.end.getTime() ? range.end : next
+        const sliceHours = (sliceEnd.getTime() - t.getTime()) / (60 * 60 * 1000)
+
+        const night = isNight(t)
+        const sundayOrHoliday = isSundayOrHoliday(t)
+        const premium = premiumPercentage(true, night, sundayOrHoliday)
+
+        baseSum += hourlyRateCop * sliceHours
+        premiumSum += hourlyRateCop * premium * sliceHours
+
+        if (sundayOrHoliday && night) overtimeSundayOrHolidayNight += sliceHours
+        else if (sundayOrHoliday) overtimeSundayOrHolidayDay += sliceHours
+        else if (night) overtimeNight += sliceHours
+        else overtimeDay += sliceHours
+
+        if (sliceEnd.getTime() >= range.end.getTime()) break
+        t = sliceEnd
+      }
+
+      const overtimeHoursTotal =
+        overtimeDay + overtimeNight + overtimeSundayOrHolidayDay + overtimeSundayOrHolidayNight
+
+      const basePayCop = roundCop(baseSum)
+      const surchargePayCop = roundCop(premiumSum)
+      const totalPayCop = roundCop(baseSum + premiumSum)
+
+      const breakdown: ShiftCalcBreakdown = {
+        hoursTotal: overtimeHoursTotal,
+        hoursDay: 0,
+        hoursNight: 0,
+        hoursSundayOrHolidayDay: 0,
+        hoursSundayOrHolidayNight: 0,
+        overtimeHoursTotal,
+        overtimeDay,
+        overtimeNight,
+        overtimeSundayOrHolidayDay,
+        overtimeSundayOrHolidayNight,
+        additionalStartTimeHHmm: additionalTimeRange?.startTimeHHmm,
+        additionalEndTimeHHmm: additionalTimeRange?.endTimeHHmm,
+        basePayCop,
+        surchargePayCop,
+        totalPayCop,
+      }
+
+      return { dateISO, shift, novelty, breakdown }
+    }
+
     if (novelty !== 'normal') {
+      const hoursTotal = 8
       const basePayCop = roundCop(hourlyRateCop * hoursTotal * noveltyMult)
       const breakdown: ShiftCalcBreakdown = {
         hoursTotal,
@@ -118,6 +253,7 @@ export function calculateShifts(
       return { dateISO, shift, novelty, breakdown }
     }
 
+    const hoursTotal = 8
     const { start, end } = shiftRange(dateISO, shift)
 
     let hoursDay = 0
@@ -207,6 +343,7 @@ export function calculateShiftsMerged(
 
   for (const item of items) {
     if (item.novelty !== 'normal') continue
+    if (item.shift === 'adicional') continue
     const { start, end } = shiftRange(item.dateISO, item.shift)
     for (let t = new Date(start); t < end; t = addHours(t, 1)) {
       hourEvents.push({

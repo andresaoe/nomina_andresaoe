@@ -8,7 +8,7 @@ export default function WelcomePage() {
           <h1 className="text-4xl font-bold text-slate-950 sm:text-5xl">Control de Nómina by @andresaoe</h1>
 
           <div className="mt-8 flex items-center justify-center gap-6">
-            <img src="https://www.trae.ai/favicon.ico" alt="Trae" className="h-14 w-14" />
+            <img src="https://github.githubassets.com/favicons/favicon.svg" alt="GitHub" className="h-14 w-14" />
             <img
               src="https://raw.githubusercontent.com/supabase/supabase/master/packages/common/assets/images/supabase-logo-icon.svg"
               alt="Supabase"

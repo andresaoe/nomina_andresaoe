@@ -38,4 +38,25 @@ describe('payrollCalculator', () => {
     expect(calc?.breakdown.basePayCop).toBe(5333)
     expect(calc?.breakdown.totalPayCop).toBe(5333)
   })
+
+  it('calcula turno adicional con rango de horas', () => {
+    const hourlyRate = 1000
+    const [calc] = calculateShifts(['2025-01-06'], 'adicional', 'normal', hourlyRate, 44, {
+      startTimeHHmm: '18:00',
+      endTimeHHmm: '20:00',
+    })
+    expect(calc?.breakdown.overtimeHoursTotal).toBe(2)
+    expect(calc?.breakdown.basePayCop).toBe(2000)
+    expect(calc?.breakdown.totalPayCop).toBeGreaterThan(2000)
+  })
+
+  it('marca horas dominicales en turno adicional', () => {
+    const hourlyRate = 1000
+    const [calc] = calculateShifts(['2025-01-05'], 'adicional', 'normal', hourlyRate, 44, {
+      startTimeHHmm: '10:00',
+      endTimeHHmm: '12:00',
+    })
+    expect(calc?.breakdown.overtimeSundayOrHolidayDay).toBe(2)
+    expect(calc?.breakdown.overtimeHoursTotal).toBe(2)
+  })
 })

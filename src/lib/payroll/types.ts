@@ -1,4 +1,4 @@
-export type ShiftType = 'manana' | 'tarde' | 'noche'
+export type ShiftType = 'manana' | 'tarde' | 'noche' | 'adicional'
 
 export type NoveltyType =
   | 'normal'
@@ -22,6 +22,8 @@ export type ShiftCalcBreakdown = {
   overtimeNight: number
   overtimeSundayOrHolidayDay: number
   overtimeSundayOrHolidayNight: number
+  additionalStartTimeHHmm?: string
+  additionalEndTimeHHmm?: string
   basePayCop: number
   surchargePayCop: number
   totalPayCop: number

@@ -6,7 +6,16 @@ import { useSession } from '../hooks/useSession'
 import DashboardShell from '../components/layout/DashboardShell'
 import KpiCard from '../components/dashboard/KpiCard'
 import SimpleBarChart from '../components/dashboard/SimpleBarChart'
-import { enqueueEntry, getPendingEntries, removePendingEntries } from '../lib/offlineQueue'
+import {
+  countUnsyncedLocalShiftEntries,
+  deleteLocalShiftEntriesByIds,
+  getLocalShiftEntryById,
+  listLocalShiftEntriesForRange,
+  listRecentLocalShiftEntries,
+  listUnsyncedLocalShiftEntries,
+  markLocalShiftEntriesSynced,
+  upsertLocalShiftEntries,
+} from '../lib/localDb'
 import {
   calculateShifts,
   calculateShiftsMerged,
@@ -16,6 +25,7 @@ import {
   roundCop,
   summarizeMonth,
 } from '../lib/payroll/payrollCalculator'
+import { isColombiaHoliday } from '../lib/payroll/colombiaHolidays'
 import type { NoveltyType, ShiftCalcBreakdown, ShiftCalculation, ShiftType } from '../lib/payroll/types'
 import type { DeductionItem, EarningItem } from '../lib/payroll/payrollCalculator'
 
@@ -93,6 +103,7 @@ const shiftOptions: { value: ShiftType; label: string }[] = [
   { value: 'manana', label: 'Mañana (5am–1pm)' },
   { value: 'tarde', label: 'Tarde (1pm–9pm)' },
   { value: 'noche', label: 'Noche (9pm–5am)' },
+  { value: 'adicional', label: 'Turno adicional' },
 ]
 
 const rangeNovelties: NoveltyType[] = [
@@ -133,10 +144,20 @@ export default function DashboardPage() {
   const [endISO, setEndISO] = useState(todayISO())
   const [shift, setShift] = useState<ShiftType>('manana')
   const [novelty, setNovelty] = useState<NoveltyType>('normal')
+  const [additionalStartTimeHHmm, setAdditionalStartTimeHHmm] = useState('18:00')
+  const [additionalEndTimeHHmm, setAdditionalEndTimeHHmm] = useState('19:00')
 
   const [preview, setPreview] = useState<ShiftCalculation[] | null>(null)
   const [saved, setSaved] = useState<SavedRow[] | null>(null)
   const [monthRows, setMonthRows] = useState<MonthRow[] | null>(null)
+  const [editingRowId, setEditingRowId] = useState<string | null>(null)
+  const [editWorkDateISO, setEditWorkDateISO] = useState(todayISO())
+  const [editShift, setEditShift] = useState<ShiftType>('manana')
+  const [editNovelty, setEditNovelty] = useState<NoveltyType>('normal')
+  const [editAdditionalStartTimeHHmm, setEditAdditionalStartTimeHHmm] = useState('18:00')
+  const [editAdditionalEndTimeHHmm, setEditAdditionalEndTimeHHmm] = useState('19:00')
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [deletingRowId, setDeletingRowId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [loadingRows, setLoadingRows] = useState(false)
@@ -145,13 +166,13 @@ export default function DashboardPage() {
   const [rowsLoadError, setRowsLoadError] = useState<string | null>(null)
   const [monthLoadError, setMonthLoadError] = useState<string | null>(null)
 
-  const [pendingCount, setPendingCount] = useState(() => getPendingEntries().length)
-  const [pendingEntries, setPendingEntries] = useState(() => getPendingEntries())
   const [activeNavId, setActiveNavId] = useState<'resumen' | 'turnos' | 'config' | 'datos'>('resumen')
+  const [pendingCount, setPendingCount] = useState(0)
 
   const requiresRange = noveltyRequiresRange(novelty)
   const currentUserEmail = session.status === 'signed_in' ? (session.session.user.email ?? '') : ''
   const isAdmin = currentUserEmail.toLowerCase() === 'andresaoe@gmail.com'
+  const currentUserId = session.status === 'signed_in' ? session.session.user.id : null
 
   useEffect(() => {
     if (!isAdmin && activeNavId === 'datos') setActiveNavId('resumen')
@@ -166,12 +187,20 @@ export default function DashboardPage() {
   }, [requiresRange])
 
   useEffect(() => {
-    setPendingCount(getPendingEntries().length)
-  }, [online])
+    if (shift === 'adicional' && novelty !== 'normal') setNovelty('normal')
+  }, [novelty, shift])
 
   useEffect(() => {
-    setPendingEntries(getPendingEntries())
-  }, [pendingCount])
+    if (editShift === 'adicional' && editNovelty !== 'normal') setEditNovelty('normal')
+  }, [editNovelty, editShift])
+
+  useEffect(() => {
+    if (session.status !== 'signed_in') return
+    if (!currentUserId) return
+    countUnsyncedLocalShiftEntries(currentUserId)
+      .then((count) => setPendingCount(count))
+      .catch(() => setPendingCount(0))
+  }, [currentUserId, online, session.status])
 
   useEffect(() => {
     return onSupabaseConfigChange(() => setSupabaseVersion((v) => v + 1))
@@ -182,7 +211,9 @@ export default function DashboardPage() {
   const supabaseSetupSql = useMemo(
     () => `create extension if not exists pgcrypto;
 
-create table if not exists public.shift_entries (
+drop table if exists public.shift_entries cascade;
+
+create table public.shift_entries (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   work_date date not null,
@@ -252,85 +283,203 @@ using (auth.uid() = user_id);`,
   }, [baseSalaryCop])
 
   useEffect(() => {
-    async function load() {
-      if (!supabase || session.status !== 'signed_in') return
+    async function loadRecent() {
+      if (session.status !== 'signed_in') return
+      if (!currentUserId) return
       setLoadingRows(true)
       setError(null)
       setRowsLoadError(null)
       try {
+        const local = await listRecentLocalShiftEntries(currentUserId, 60)
+        setSaved(
+          local.map((r) => ({
+            id: r.id,
+            work_date: r.work_date,
+            shift: r.shift,
+            novelty: r.novelty,
+            total_pay_cop: r.total_pay_cop,
+            breakdown: r.breakdown,
+            created_at: r.created_at,
+          })),
+        )
+
+        if (!online) return
+        if (!supabase) return
+
         const { data, error: selectError } = await supabase
           .from('shift_entries')
-          .select('id, work_date, shift, novelty, total_pay_cop, created_at')
+          .select('id, user_id, work_date, shift, novelty, hourly_rate_cop, total_pay_cop, breakdown, created_at')
           .order('work_date', { ascending: false })
-          .limit(60)
+          .limit(200)
+
         if (selectError) {
-          setSaved(null)
           setRowsLoadError(selectError.message)
           return
         }
-        setSaved((data ?? []) as SavedRow[])
+
+        const cloud = (data ?? []).filter((r) => r.user_id === currentUserId)
+        await upsertLocalShiftEntries(
+          cloud.map((r) => ({
+            id: r.id,
+            user_id: r.user_id,
+            work_date: r.work_date,
+            shift: r.shift as ShiftType,
+            novelty: r.novelty as NoveltyType,
+            hourly_rate_cop: r.hourly_rate_cop,
+            total_pay_cop: r.total_pay_cop,
+            breakdown: r.breakdown as ShiftCalcBreakdown,
+            created_at: r.created_at,
+            synced: true,
+          })),
+        )
+
+        const refreshed = await listRecentLocalShiftEntries(currentUserId, 60)
+        setSaved(
+          refreshed.map((r) => ({
+            id: r.id,
+            work_date: r.work_date,
+            shift: r.shift,
+            novelty: r.novelty,
+            total_pay_cop: r.total_pay_cop,
+            breakdown: r.breakdown,
+            created_at: r.created_at,
+          })),
+        )
+      } catch (err) {
+        setSaved(null)
+        setRowsLoadError(err instanceof Error ? err.message : 'No se pudieron leer turnos desde el dispositivo.')
       } finally {
         setLoadingRows(false)
       }
     }
-    load()
-  }, [session.status, supabase])
+    loadRecent()
+  }, [currentUserId, online, session.status, supabase])
 
   useEffect(() => {
     async function loadMonth() {
-      if (!supabase || session.status !== 'signed_in') return
+      if (session.status !== 'signed_in') return
+      if (!currentUserId) return
       const { start, end } = monthBounds(selectedMonthPrefix)
       setLoadingMonth(true)
       setMonthLoadError(null)
       try {
+        const local = await listLocalShiftEntriesForRange(currentUserId, start, end)
+        setMonthRows(
+          local
+            .sort((a, b) => (a.work_date < b.work_date ? -1 : a.work_date > b.work_date ? 1 : 0))
+            .map((r) => ({
+              work_date: r.work_date,
+              novelty: r.novelty,
+              total_pay_cop: r.total_pay_cop,
+              breakdown: r.breakdown,
+            })),
+        )
+
+        if (!online) return
+        if (!supabase) return
+
         const { data, error: selectError } = await supabase
           .from('shift_entries')
-          .select('work_date, novelty, total_pay_cop, breakdown')
+          .select('id, user_id, work_date, shift, novelty, hourly_rate_cop, total_pay_cop, breakdown, created_at')
           .gte('work_date', start)
           .lte('work_date', end)
           .order('work_date', { ascending: true })
-          .limit(1000)
+          .limit(2000)
+
         if (selectError) {
-          setMonthRows(null)
           setMonthLoadError(selectError.message)
           return
         }
-        setMonthRows((data ?? []) as MonthRow[])
+
+        const cloud = (data ?? []).filter((r) => r.user_id === currentUserId)
+        await upsertLocalShiftEntries(
+          cloud.map((r) => ({
+            id: r.id,
+            user_id: r.user_id,
+            work_date: r.work_date,
+            shift: r.shift as ShiftType,
+            novelty: r.novelty as NoveltyType,
+            hourly_rate_cop: r.hourly_rate_cop,
+            total_pay_cop: r.total_pay_cop,
+            breakdown: r.breakdown as ShiftCalcBreakdown,
+            created_at: r.created_at,
+            synced: true,
+          })),
+        )
+
+        const refreshed = await listLocalShiftEntriesForRange(currentUserId, start, end)
+        setMonthRows(
+          refreshed
+            .sort((a, b) => (a.work_date < b.work_date ? -1 : a.work_date > b.work_date ? 1 : 0))
+            .map((r) => ({
+              work_date: r.work_date,
+              novelty: r.novelty,
+              total_pay_cop: r.total_pay_cop,
+              breakdown: r.breakdown,
+            })),
+        )
+      } catch (err) {
+        setMonthRows(null)
+        setMonthLoadError(err instanceof Error ? err.message : 'No se pudo cargar el mes desde el dispositivo.')
       } finally {
         setLoadingMonth(false)
       }
     }
     loadMonth()
-  }, [selectedMonthPrefix, session.status, supabase])
+  }, [currentUserId, online, selectedMonthPrefix, session.status, supabase])
 
   useEffect(() => {
     async function syncPending() {
-      if (!supabase || session.status !== 'signed_in') return
+      if (session.status !== 'signed_in') return
       if (!online) return
-      const pending = getPendingEntries()
-      if (!pending.length) return
+      if (!supabase) return
+      if (!currentUserId) return
+      try {
+        const pending = await listUnsyncedLocalShiftEntries(currentUserId, 200)
+        if (!pending.length) return
 
-      const { error: insertError } = await supabase.from('shift_entries').insert(pending.map((p) => p.payload))
-      if (insertError) return
-      removePendingEntries(pending.map((p) => p.id))
-      setPendingCount(getPendingEntries().length)
-      setInfo('Se sincronizaron turnos guardados sin conexión.')
+        const deletions = pending.filter((p) => p.deleted)
+        const upserts = pending.filter((p) => !p.deleted)
+
+        if (deletions.length) {
+          const ids = deletions.map((p) => p.id)
+          const { error: deleteError } = await supabase.from('shift_entries').delete().in('id', ids)
+          if (deleteError) return
+          await deleteLocalShiftEntriesByIds(currentUserId, ids)
+        }
+
+        if (upserts.length) {
+          const payloads = upserts.map((p) => ({
+            id: p.id,
+            user_id: p.user_id,
+            work_date: p.work_date,
+            shift: p.shift,
+            novelty: p.novelty,
+            hourly_rate_cop: p.hourly_rate_cop,
+            total_pay_cop: p.total_pay_cop,
+            breakdown: p.breakdown,
+            created_at: p.created_at,
+          }))
+
+          const { error: upsertError } = await supabase.from('shift_entries').upsert(payloads, { onConflict: 'id' })
+          if (upsertError) return
+
+          await markLocalShiftEntriesSynced(
+            currentUserId,
+            upserts.map((p) => p.id),
+          )
+        }
+        setPendingCount(await countUnsyncedLocalShiftEntries(currentUserId))
+        setInfo('Se sincronizaron turnos guardados en el dispositivo.')
+      } catch {
+        return
+      }
     }
     syncPending()
-  }, [online, session.status, supabase])
+  }, [currentUserId, online, session.status, supabase])
 
   const monthEntries = useMemo(() => {
-    const pending = pendingEntries
-      .map((p) => p.payload as Record<string, unknown>)
-      .filter((p) => typeof p.work_date === 'string' && (p.work_date as string).startsWith(selectedMonthPrefix))
-      .map((p) => ({
-        work_date: p.work_date as string,
-        novelty: p.novelty as NoveltyType,
-        total_pay_cop: (p.total_pay_cop as number) ?? 0,
-        breakdown: (p.breakdown as ShiftCalcBreakdown) ?? ({} as ShiftCalcBreakdown),
-      }))
-
-    const rows = (monthRows ?? []).concat(pending)
+    const rows = (monthRows ?? []).slice()
     rows.sort((a, b) => (a.work_date < b.work_date ? -1 : a.work_date > b.work_date ? 1 : 0))
     return rows.map((r) => ({
       workDateISO: r.work_date,
@@ -338,7 +487,7 @@ using (auth.uid() = user_id);`,
       totalPayCop: r.total_pay_cop,
       breakdown: r.breakdown,
     }))
-  }, [monthRows, pendingEntries, selectedMonthPrefix])
+  }, [monthRows])
 
   const monthTotal = useMemo(() => {
     const total = monthEntries.reduce((acc, e) => acc + (e.totalPayCop || 0), 0)
@@ -396,33 +545,36 @@ using (auth.uid() = user_id);`,
   const calculateForRange = useCallback(
     async (dates: string[]) => {
       if (!hourlyRate) return []
-      if (!supabase || session.status !== 'signed_in' || !online) {
-        return calculateShifts(dates, shift, novelty, hourlyRate)
+      const additionalTimeRange =
+        shift === 'adicional'
+          ? { startTimeHHmm: additionalStartTimeHHmm, endTimeHHmm: additionalEndTimeHHmm }
+          : null
+
+      if (shift === 'adicional') {
+        if (session.status !== 'signed_in') return calculateShifts(dates, shift, novelty, hourlyRate, 44, additionalTimeRange)
+        if (!currentUserId) return calculateShifts(dates, shift, novelty, hourlyRate, 44, additionalTimeRange)
       }
+
+      if (session.status !== 'signed_in') return calculateShifts(dates, shift, novelty, hourlyRate)
+      if (!currentUserId) return calculateShifts(dates, shift, novelty, hourlyRate)
 
       const fetchFrom = weekStartIsoFromDateISO(dates[0] ?? startISO)
       const fetchTo = weekEndIsoFromDateISO(dates[dates.length - 1] ?? endISO)
 
-      const { data, error: selectError } = await supabase
-        .from('shift_entries')
-        .select('work_date, shift, novelty')
-        .gte('work_date', fetchFrom)
-        .lte('work_date', fetchTo)
-
-      if (selectError || !data) {
-        return calculateShifts(dates, shift, novelty, hourlyRate)
-      }
-
-      const existing = (data as { work_date: string; shift: ShiftType; novelty: NoveltyType }[])
-        .filter((r) => r.work_date)
-        .map((r) => ({ dateISO: r.work_date, shift: r.shift, novelty: r.novelty, tag: 'existing' as const }))
+      const localExisting = await listLocalShiftEntriesForRange(currentUserId, fetchFrom, fetchTo)
+      const existing = localExisting.map((r) => ({
+        dateISO: r.work_date,
+        shift: r.shift,
+        novelty: r.novelty,
+        tag: 'existing' as const,
+      }))
 
       const current = dates.map((d) => ({ dateISO: d, shift, novelty, tag: 'new' as const }))
 
       const merged = calculateShiftsMerged([...existing, ...current], hourlyRate)
       return merged.slice(existing.length)
     },
-    [endISO, hourlyRate, novelty, online, session.status, shift, startISO, supabase],
+    [additionalEndTimeHHmm, additionalStartTimeHHmm, currentUserId, endISO, hourlyRate, novelty, session.status, shift, startISO],
   )
 
   useEffect(() => {
@@ -510,7 +662,11 @@ using (auth.uid() = user_id);`,
   async function onSaveTurns() {
     setError(null)
     setInfo(null)
-    if (!supabase || session.status !== 'signed_in') {
+    if (session.status !== 'signed_in') {
+      setError('No hay sesión activa.')
+      return
+    }
+    if (!currentUserId) {
       setError('No hay sesión activa.')
       return
     }
@@ -524,50 +680,236 @@ using (auth.uid() = user_id);`,
 
     setSavingRows(true)
     try {
-      const payloads = calculations.map((calc) => ({
-        user_id: session.session.user.id,
+      const nowIso = new Date().toISOString()
+      const entries = calculations.map((calc) => ({
+        id: crypto.randomUUID(),
+        user_id: currentUserId,
         work_date: calc.dateISO,
         shift: calc.shift,
         novelty: calc.novelty,
         hourly_rate_cop: roundCop(hourlyRate),
         total_pay_cop: calc.breakdown.totalPayCop,
         breakdown: calc.breakdown,
+        created_at: nowIso,
+        synced: false,
       }))
 
-      if (!online) {
-        for (const payload of payloads) {
-          enqueueEntry({ id: crypto.randomUUID(), payload, createdAt: new Date().toISOString() })
-        }
-        setPendingCount(getPendingEntries().length)
-        setInfo('Sin conexión: turnos guardados en el dispositivo para sincronizar luego.')
-        setPreview(calculations)
-        return
-      }
-
-      const { error: insertError } = await supabase.from('shift_entries').insert(payloads)
-      if (insertError) {
-        const message = insertError.message || 'No se pudieron guardar los turnos.'
-        for (const payload of payloads) {
-          enqueueEntry({ id: crypto.randomUUID(), payload, createdAt: new Date().toISOString() })
-        }
-        setPendingCount(getPendingEntries().length)
-        setInfo('No se pudo guardar en la nube. Se guardó localmente para sincronizar luego.')
-        setError(message)
-        setPreview(calculations)
-        return
-      }
-
+      await upsertLocalShiftEntries(entries)
+      setPendingCount(await countUnsyncedLocalShiftEntries(currentUserId))
       setPreview(calculations)
-      setInfo('Turnos guardados en la nube.')
 
-      const { data } = await supabase
-        .from('shift_entries')
-        .select('id, work_date, shift, novelty, total_pay_cop, created_at')
-        .order('work_date', { ascending: false })
-        .limit(60)
-      setSaved((data ?? []) as SavedRow[])
+      {
+        const refreshed = await listRecentLocalShiftEntries(currentUserId, 60)
+        setSaved(
+          refreshed.map((r) => ({
+            id: r.id,
+            work_date: r.work_date,
+            shift: r.shift,
+            novelty: r.novelty,
+            total_pay_cop: r.total_pay_cop,
+            breakdown: r.breakdown,
+            created_at: r.created_at,
+          })),
+        )
+      }
+
+      {
+        const { start, end } = monthBounds(selectedMonthPrefix)
+        const refreshedMonth = await listLocalShiftEntriesForRange(currentUserId, start, end)
+        setMonthRows(
+          refreshedMonth
+            .sort((a, b) => (a.work_date < b.work_date ? -1 : a.work_date > b.work_date ? 1 : 0))
+            .map((r) => ({
+              work_date: r.work_date,
+              novelty: r.novelty,
+              total_pay_cop: r.total_pay_cop,
+              breakdown: r.breakdown,
+            })),
+        )
+      }
+
+      if (!online || !supabase) {
+        setInfo('Sin conexión: turnos guardados en el dispositivo para sincronizar luego.')
+        return
+      }
+
+      const payloads = entries.map((e) => ({
+        id: e.id,
+        user_id: e.user_id,
+        work_date: e.work_date,
+        shift: e.shift,
+        novelty: e.novelty,
+        hourly_rate_cop: e.hourly_rate_cop,
+        total_pay_cop: e.total_pay_cop,
+        breakdown: e.breakdown,
+        created_at: e.created_at,
+      }))
+
+      const { error: upsertError } = await supabase.from('shift_entries').upsert(payloads, { onConflict: 'id' })
+      if (upsertError) {
+        setInfo('No se pudo guardar en la nube. Se guardó localmente para sincronizar luego.')
+        setError(upsertError.message || 'No se pudieron guardar los turnos.')
+        return
+      }
+
+      await markLocalShiftEntriesSynced(
+        currentUserId,
+        entries.map((e) => e.id),
+      )
+      setPendingCount(await countUnsyncedLocalShiftEntries(currentUserId))
+      setInfo('Turnos guardados y sincronizados.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudieron guardar los turnos.')
     } finally {
       setSavingRows(false)
+    }
+  }
+
+  const editPreview = useMemo(() => {
+    if (!editingRowId) return null
+    if (!hourlyRate) return null
+    const additionalTimeRange =
+      editShift === 'adicional'
+        ? { startTimeHHmm: editAdditionalStartTimeHHmm, endTimeHHmm: editAdditionalEndTimeHHmm }
+        : null
+    const calc = calculateShifts([editWorkDateISO], editShift, editNovelty, hourlyRate, 44, additionalTimeRange)[0]
+    return calc ?? null
+  }, [editAdditionalEndTimeHHmm, editAdditionalStartTimeHHmm, editNovelty, editShift, editWorkDateISO, editingRowId, hourlyRate])
+
+  async function refreshTurnosData() {
+    if (!currentUserId) return
+    const refreshed = await listRecentLocalShiftEntries(currentUserId, 60)
+    setSaved(
+      refreshed.map((r) => ({
+        id: r.id,
+        work_date: r.work_date,
+        shift: r.shift,
+        novelty: r.novelty,
+        total_pay_cop: r.total_pay_cop,
+        breakdown: r.breakdown,
+        created_at: r.created_at,
+      })),
+    )
+
+    const { start, end } = monthBounds(selectedMonthPrefix)
+    const refreshedMonth = await listLocalShiftEntriesForRange(currentUserId, start, end)
+    setMonthRows(
+      refreshedMonth
+        .sort((a, b) => (a.work_date < b.work_date ? -1 : a.work_date > b.work_date ? 1 : 0))
+        .map((r) => ({
+          work_date: r.work_date,
+          novelty: r.novelty,
+          total_pay_cop: r.total_pay_cop,
+          breakdown: r.breakdown,
+        })),
+    )
+  }
+
+  async function onSaveEditRow() {
+    setError(null)
+    setInfo(null)
+    if (!editingRowId) return
+    if (!currentUserId) return
+    if (!hourlyRate) {
+      setError('Configura primero la base salarial.')
+      return
+    }
+
+    setSavingEdit(true)
+    try {
+      const existing = await getLocalShiftEntryById(currentUserId, editingRowId)
+      if (!existing) {
+        setError('No se encontró el turno para editar.')
+        return
+      }
+
+      const additionalTimeRange =
+        editShift === 'adicional'
+          ? { startTimeHHmm: editAdditionalStartTimeHHmm, endTimeHHmm: editAdditionalEndTimeHHmm }
+          : null
+      const calc = calculateShifts([editWorkDateISO], editShift, editNovelty, hourlyRate, 44, additionalTimeRange)[0]
+      if (!calc) {
+        setError('No se pudo recalcular el turno.')
+        return
+      }
+
+      const updated = {
+        ...existing,
+        work_date: editWorkDateISO,
+        shift: editShift,
+        novelty: editNovelty,
+        hourly_rate_cop: roundCop(hourlyRate),
+        total_pay_cop: calc.breakdown.totalPayCop,
+        breakdown: calc.breakdown,
+        synced: false,
+        deleted: false,
+      }
+
+      await upsertLocalShiftEntries([updated])
+      setPendingCount(await countUnsyncedLocalShiftEntries(currentUserId))
+
+      if (online && supabase) {
+        const payload = {
+          id: updated.id,
+          user_id: updated.user_id,
+          work_date: updated.work_date,
+          shift: updated.shift,
+          novelty: updated.novelty,
+          hourly_rate_cop: updated.hourly_rate_cop,
+          total_pay_cop: updated.total_pay_cop,
+          breakdown: updated.breakdown,
+          created_at: updated.created_at,
+        }
+        const { error: upsertError } = await supabase.from('shift_entries').upsert([payload], { onConflict: 'id' })
+        if (!upsertError) {
+          await markLocalShiftEntriesSynced(currentUserId, [updated.id])
+          setPendingCount(await countUnsyncedLocalShiftEntries(currentUserId))
+        }
+      }
+
+      await refreshTurnosData()
+      setEditingRowId(null)
+      setInfo('Turno actualizado.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo editar el turno.')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  async function onConfirmDeleteRow() {
+    setError(null)
+    setInfo(null)
+    if (!deletingRowId) return
+    if (!currentUserId) return
+
+    setSavingEdit(true)
+    try {
+      const existing = await getLocalShiftEntryById(currentUserId, deletingRowId)
+      if (!existing) {
+        setError('No se encontró el turno para eliminar.')
+        return
+      }
+
+      await upsertLocalShiftEntries([{ ...existing, deleted: true, synced: false }])
+      setPendingCount(await countUnsyncedLocalShiftEntries(currentUserId))
+      await refreshTurnosData()
+      setDeletingRowId(null)
+
+      if (online && supabase) {
+        const { error: deleteError } = await supabase.from('shift_entries').delete().eq('id', existing.id)
+        if (!deleteError) {
+          await deleteLocalShiftEntriesByIds(currentUserId, [existing.id])
+          setPendingCount(await countUnsyncedLocalShiftEntries(currentUserId))
+          await refreshTurnosData()
+        }
+      }
+
+      setInfo('Turno eliminado.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo eliminar el turno.')
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -588,6 +930,35 @@ using (auth.uid() = user_id);`,
   const noveltyTint = (value: NoveltyType) =>
     noveltyOptions.find((n) => n.value === value)?.tint ?? 'rgba(15, 23, 42, 0.18)'
 
+  const noveltyLabel = (value: NoveltyType) => noveltyOptions.find((n) => n.value === value)?.label ?? value
+
+  const dayBadge = (dateISO: string, breakdown?: ShiftCalcBreakdown) => {
+    const d0 = new Date(`${dateISO}T00:00:00`)
+    if (Number.isNaN(d0.getTime())) return { label: 'Normal', tone: 'normal' as const }
+    const d1 = new Date(d0)
+    d1.setDate(d1.getDate() + 1)
+
+    const sunday = d0.getDay() === 0 || d1.getDay() === 0
+    const holiday = isColombiaHoliday(d0) || isColombiaHoliday(d1)
+    const sundayOrHolidayHours =
+      (breakdown?.hoursSundayOrHolidayDay ?? 0) +
+      (breakdown?.hoursSundayOrHolidayNight ?? 0) +
+      (breakdown?.overtimeSundayOrHolidayDay ?? 0) +
+      (breakdown?.overtimeSundayOrHolidayNight ?? 0)
+
+    if (sundayOrHolidayHours > 0) {
+      if (sunday) return { label: 'Domingo', tone: 'sunday' as const }
+      if (holiday) return { label: 'Festivo', tone: 'holiday' as const }
+      return { label: 'Festivo', tone: 'holiday' as const }
+    }
+
+    if (d0.getDay() === 0) return { label: 'Domingo', tone: 'sunday' as const }
+    if (isColombiaHoliday(d0)) return { label: 'Festivo', tone: 'holiday' as const }
+    return { label: 'Normal', tone: 'normal' as const }
+  }
+
+  const hasOvertime = (breakdown?: ShiftCalcBreakdown) => (breakdown?.overtimeHoursTotal ?? 0) > 0
+
   const navItems = [
     { id: 'resumen', label: 'Resumen' },
     { id: 'turnos', label: 'Turnos' },
@@ -604,6 +975,13 @@ using (auth.uid() = user_id);`,
     'inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-slate-950/20 disabled:cursor-not-allowed disabled:opacity-50'
   const btnPrimary = `${btnBase} bg-slate-950 text-white hover:bg-slate-900`
   const btnNeutral = `${btnBase} bg-white text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50`
+  const badgeBase = 'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium'
+  const badgeTone = {
+    normal: `${badgeBase} border-slate-200 bg-slate-50 text-slate-700`,
+    sunday: `${badgeBase} border-blue-200 bg-blue-50 text-blue-700`,
+    holiday: `${badgeBase} border-rose-200 bg-rose-50 text-rose-700`,
+    extra: `${badgeBase} border-emerald-200 bg-emerald-50 text-emerald-700`,
+  }
 
   return (
     <DashboardShell
@@ -853,6 +1231,23 @@ using (auth.uid() = user_id);`,
                     ))}
                   </select>
                 </label>
+                {shift === 'adicional' ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="text-sm text-slate-700">
+                      Hora inicio (adicional)
+                      <input
+                        className={inputClass}
+                        type="time"
+                        value={additionalStartTimeHHmm}
+                        onChange={(e) => setAdditionalStartTimeHHmm(e.target.value)}
+                      />
+                    </label>
+                    <label className="text-sm text-slate-700">
+                      Hora fin (adicional)
+                      <input className={inputClass} type="time" value={additionalEndTimeHHmm} onChange={(e) => setAdditionalEndTimeHHmm(e.target.value)} />
+                    </label>
+                  </div>
+                ) : null}
                 <label className="text-sm text-slate-700">
                   Novedad
                   <select className={selectClass} value={novelty} onChange={(e) => setNovelty(e.target.value as NoveltyType)}>
@@ -893,9 +1288,18 @@ using (auth.uid() = user_id);`,
                   <div className="mt-4 grid gap-2">
                     {preview.slice(0, 20).map((p) => (
                       <div key={`${p.dateISO}-${p.shift}-${p.novelty}`} className="flex items-center justify-between gap-3 border-t border-slate-200 pt-2 text-sm">
-                        <span className="text-slate-700">
-                          {p.dateISO} · {shiftOptions.find((s) => s.value === p.shift)?.label}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-2 text-slate-700">
+                          <span>
+                            {p.dateISO} · {shiftOptions.find((s) => s.value === p.shift)?.label}
+                          </span>
+                          {(() => {
+                            const badge = dayBadge(p.dateISO, p.breakdown)
+                            return <span className={badgeTone[badge.tone]}>{badge.label}</span>
+                          })()}
+                          {p.shift === 'adicional' || hasOvertime(p.breakdown) ? (
+                            <span className={badgeTone.extra}>{p.shift === 'adicional' ? 'Adicional' : 'Horas extra'}</span>
+                          ) : null}
+                        </div>
                         <span
                           className="rounded-full border px-3 py-1 text-xs text-slate-900"
                           style={{ borderColor: noveltyTint(p.novelty) }}
@@ -915,7 +1319,7 @@ using (auth.uid() = user_id);`,
                   <div className="mt-3 text-sm text-slate-600">Cargando…</div>
                 ) : !saved ? (
                   <div className="mt-3 text-sm text-slate-700">
-                    No se pudieron leer turnos desde Supabase{rowsLoadError ? `: ${rowsLoadError}` : ''}.
+                    No se pudieron leer turnos desde el dispositivo{rowsLoadError ? `: ${rowsLoadError}` : ''}.
                     <div className="mt-3">
                       <button
                         type="button"
@@ -935,19 +1339,171 @@ using (auth.uid() = user_id);`,
                 ) : (
                   <div className="mt-4 grid gap-2">
                     {saved.map((row) => (
-                      <div key={row.id} className="flex items-center justify-between gap-3 border-t border-slate-200 pt-2 text-sm">
-                        <span className="text-slate-700">
-                          {row.work_date} · {shiftOptions.find((s) => s.value === row.shift)?.label}
-                        </span>
-                        <span className="rounded-full border px-3 py-1 text-xs text-slate-900" style={{ borderColor: noveltyTint(row.novelty) }}>
-                          {formatCop(row.total_pay_cop)}
-                        </span>
+                      <div key={row.id} className="flex items-start justify-between gap-3 border-t border-slate-200 pt-2 text-sm">
+                        <div className="min-w-0">
+                          <div className="truncate text-slate-700">
+                            {row.work_date} · {shiftOptions.find((s) => s.value === row.shift)?.label}
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            {(() => {
+                              const badge = dayBadge(row.work_date, row.breakdown)
+                              return <span className={badgeTone[badge.tone]}>{badge.label}</span>
+                            })()}
+                            {row.shift === 'adicional' || hasOvertime(row.breakdown) ? (
+                              <span className={badgeTone.extra}>{row.shift === 'adicional' ? 'Adicional' : 'Horas extra'}</span>
+                            ) : null}
+                          </div>
+                          <div className="mt-1 text-xs text-slate-500">{noveltyLabel(row.novelty)}</div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span
+                            className="rounded-full border px-3 py-1 text-xs text-slate-900"
+                            style={{ borderColor: noveltyTint(row.novelty) }}
+                          >
+                            {formatCop(row.total_pay_cop)}
+                          </span>
+                          <button
+                            type="button"
+                            className="rounded-xl bg-white px-3 py-2 text-xs font-medium text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-950/20"
+                            onClick={() => {
+                              setError(null)
+                              setInfo(null)
+                              setEditingRowId(row.id)
+                              setEditWorkDateISO(row.work_date)
+                              setEditShift(row.shift)
+                              setEditNovelty(row.novelty)
+                              setEditAdditionalStartTimeHHmm(row.breakdown?.additionalStartTimeHHmm ?? '18:00')
+                              setEditAdditionalEndTimeHHmm(row.breakdown?.additionalEndTimeHHmm ?? '19:00')
+                            }}
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-medium text-white hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-600/30"
+                            onClick={() => {
+                              setError(null)
+                              setInfo(null)
+                              setDeletingRowId(row.id)
+                            }}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
             </div>
+
+            {editingRowId ? (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+                <div className="w-full max-w-lg rounded-3xl bg-white p-6 ring-1 ring-slate-200">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-base font-semibold text-slate-950">Editar turno</div>
+                      <div className="mt-1 text-sm text-slate-600">Actualiza la fecha, turno o novedad.</div>
+                    </div>
+                    <button
+                      type="button"
+                      className={btnNeutral}
+                      onClick={() => setEditingRowId(null)}
+                      disabled={savingEdit}
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+
+                  <div className="mt-4 grid gap-3">
+                    <label className="text-sm text-slate-700">
+                      Día
+                      <input className={inputClass} value={editWorkDateISO} onChange={(e) => setEditWorkDateISO(e.target.value)} type="date" />
+                    </label>
+                    <label className="text-sm text-slate-700">
+                      Turno
+                      <select className={selectClass} value={editShift} onChange={(e) => setEditShift(e.target.value as ShiftType)}>
+                        {shiftOptions.map((s) => (
+                          <option key={s.value} value={s.value}>
+                            {s.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {editShift === 'adicional' ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="text-sm text-slate-700">
+                          Hora inicio (adicional)
+                          <input
+                            className={inputClass}
+                            type="time"
+                            value={editAdditionalStartTimeHHmm}
+                            onChange={(e) => setEditAdditionalStartTimeHHmm(e.target.value)}
+                          />
+                        </label>
+                        <label className="text-sm text-slate-700">
+                          Hora fin (adicional)
+                          <input
+                            className={inputClass}
+                            type="time"
+                            value={editAdditionalEndTimeHHmm}
+                            onChange={(e) => setEditAdditionalEndTimeHHmm(e.target.value)}
+                          />
+                        </label>
+                      </div>
+                    ) : null}
+                    <label className="text-sm text-slate-700">
+                      Novedad
+                      <select className={selectClass} value={editNovelty} onChange={(e) => setEditNovelty(e.target.value as NoveltyType)}>
+                        {noveltyOptions.map((n) => (
+                          <option key={n.value} value={n.value}>
+                            {n.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-slate-700">Total</span>
+                        <span className="text-slate-950">{editPreview ? formatCop(editPreview.breakdown.totalPayCop) : '—'}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <button type="button" className={btnNeutral} onClick={() => setEditingRowId(null)} disabled={savingEdit}>
+                        Cancelar
+                      </button>
+                      <button type="button" className={btnPrimary} onClick={onSaveEditRow} disabled={!editPreview || savingEdit}>
+                        {savingEdit ? 'Guardando…' : 'Guardar cambios'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {deletingRowId ? (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+                <div className="w-full max-w-md rounded-3xl bg-white p-6 ring-1 ring-slate-200">
+                  <div className="text-base font-semibold text-slate-950">Eliminar turno</div>
+                  <div className="mt-2 text-sm text-slate-600">Esta acción no se puede deshacer.</div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button type="button" className={btnNeutral} onClick={() => setDeletingRowId(null)} disabled={savingEdit}>
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center rounded-xl bg-rose-600 px-3 py-2 text-sm font-medium text-white hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-600/30 disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={onConfirmDeleteRow}
+                      disabled={savingEdit}
+                    >
+                      {savingEdit ? 'Eliminando…' : 'Eliminar'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -1162,7 +1718,7 @@ using (auth.uid() = user_id);`,
 
             <div className={cardClass}>
               <div className="text-base font-semibold text-slate-950">Vista previa del mes</div>
-              <div className="mt-2 text-sm text-slate-600">Datos usados: nube + pendientes del navegador</div>
+              <div className="mt-2 text-sm text-slate-600">Datos usados: dispositivo + nube</div>
               <div className="mt-4">
                 {!dailyPayPoints.length ? <div className="text-sm text-slate-600">Aún no hay datos.</div> : <SimpleBarChart points={dailyPayPoints} />}
               </div>
@@ -1211,7 +1767,7 @@ using (auth.uid() = user_id);`,
                   <span className="text-slate-950">{pendingCount}</span>
                 </div>
                 <div className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200">
-                  Si cambias de navegador, debes volver a configurar Supabase para sincronizar.
+                  Los turnos se guardan en este dispositivo y se sincronizan cuando hay conexión.
                 </div>
               </div>
             </div>
