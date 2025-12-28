@@ -211,38 +211,43 @@ export default function DashboardPage() {
   const supabaseSetupSql = useMemo(
     () => `create extension if not exists pgcrypto;
 
-drop table if exists public.shift_entries cascade;
-
-create table public.shift_entries (
+create table if not exists public.shift_entries (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   work_date date not null,
-  shift text not null,
-  novelty text not null,
-  hourly_rate_cop integer not null,
-  total_pay_cop integer not null,
+  shift text not null check (shift in ('manana','tarde','noche','adicional')),
+  novelty text not null check (novelty in ('normal','incapacidad_eps','incapacidad_arl','vacaciones','licencia_remunerada','licencia_no_remunerada','dia_familia','cumpleanos','ausencia')),
+  hourly_rate_cop integer not null check (hourly_rate_cop >= 0),
+  total_pay_cop integer not null check (total_pay_cop >= 0),
   breakdown jsonb not null,
   created_at timestamptz not null default now()
 );
 
 alter table public.shift_entries enable row level security;
 
+drop policy if exists "shift_entries_select_own" on public.shift_entries;
 create policy "shift_entries_select_own"
 on public.shift_entries for select
 using (auth.uid() = user_id);
 
+drop policy if exists "shift_entries_insert_own" on public.shift_entries;
 create policy "shift_entries_insert_own"
 on public.shift_entries for insert
 with check (auth.uid() = user_id);
 
+drop policy if exists "shift_entries_update_own" on public.shift_entries;
 create policy "shift_entries_update_own"
 on public.shift_entries for update
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
+drop policy if exists "shift_entries_delete_own" on public.shift_entries;
 create policy "shift_entries_delete_own"
 on public.shift_entries for delete
-using (auth.uid() = user_id);`,
+using (auth.uid() = user_id);
+
+create index if not exists shift_entries_user_date_idx on public.shift_entries(user_id, work_date);
+create index if not exists shift_entries_user_created_idx on public.shift_entries(user_id, created_at);`,
     [],
   )
 
