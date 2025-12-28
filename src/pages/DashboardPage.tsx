@@ -908,8 +908,20 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
   }, [calculateForRange, hourlyRate, requiresRange, session.status, startISO])
 
   async function onSignOut() {
-    if (supabase) await supabase.auth.signOut()
-    navigate('/auth', { replace: true })
+    setError(null)
+    setInfo(null)
+    const client = supabase ?? getSupabase()
+    try {
+      await client?.auth.signOut()
+    } catch {
+      try {
+        await client?.auth.signOut({ scope: 'local' })
+      } catch {
+        //
+      }
+    } finally {
+      navigate('/auth', { replace: true })
+    }
   }
 
   async function onSavePayrollConfig() {

@@ -113,33 +113,41 @@ export default function AuthPage() {
   }
 
   const inputClass =
-    'mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-950/20'
+    'mt-1 w-full rounded-xl border border-white/15 bg-white/90 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 shadow-sm focus:outline-none focus:ring-2 focus:ring-fuchsia-400/30'
   const btnBase =
     'inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-slate-950/20 disabled:cursor-not-allowed disabled:opacity-50'
-  const btnPrimary = `${btnBase} bg-slate-950 text-white hover:bg-slate-900`
-  const btnNeutral = `${btnBase} bg-white text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50`
+  const btnPrimary = `${btnBase} bg-gradient-to-r from-indigo-500 to-fuchsia-500 text-white hover:from-indigo-400 hover:to-fuchsia-400 focus:ring-white/30`
+  const btnNeutral = `${btnBase} bg-white/10 text-slate-100 ring-1 ring-white/15 hover:bg-white/15 focus:ring-white/30`
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+    <div className="relative min-h-screen overflow-hidden bg-slate-950">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(1200px_circle_at_20%_10%,rgba(99,102,241,0.26),transparent_60%),radial-gradient(900px_circle_at_85%_20%,rgba(236,72,153,0.20),transparent_55%),radial-gradient(900px_circle_at_50%_90%,rgba(34,197,94,0.14),transparent_55%)]" />
+      <div className="pointer-events-none absolute inset-0 opacity-30 [background-image:radial-gradient(rgba(148,163,184,0.25)_1px,transparent_1px)] [background-size:24px_24px]" />
+
+      <div className="relative mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-3xl bg-white p-6 ring-1 ring-slate-200">
-            <h1 className="text-xl font-semibold text-slate-950 sm:text-2xl">Control de Nómina by @andresaoe</h1>
-            <p className="mt-2 text-sm text-slate-600">
+          <div className="rounded-3xl bg-white/10 p-6 text-slate-100 shadow-[0_24px_80px_-50px_rgba(0,0,0,0.7)] ring-1 ring-white/15 backdrop-blur-xl">
+            <h1 className="text-xl font-semibold sm:text-2xl">
+              <span className="bg-gradient-to-r from-indigo-200 via-white to-fuchsia-200 bg-clip-text text-transparent">
+                Control de Nómina
+              </span>
+              <span className="block text-sm font-medium text-slate-300">by @andresaoe</span>
+            </h1>
+            <p className="mt-2 text-sm text-slate-300">
               Inicia sesión para usar el dashboard de turnos y cálculo automático.
             </p>
             {!supabaseReady ? (
               <div className="mt-4 grid gap-3">
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+                <div className="rounded-2xl border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
                   Servicio no disponible. Falta configurar Supabase.
                 </div>
-                <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
-                  <div className="text-sm font-medium text-slate-900">Configurar Supabase</div>
-                  <div className="mt-1 text-sm text-slate-600">
+                <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
+                  <div className="text-sm font-medium text-slate-100">Configurar Supabase</div>
+                  <div className="mt-1 text-sm text-slate-300">
                     Si publicaste en Vercel, asegúrate de configurar las variables VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY. Como alternativa, puedes pegarlas aquí (se guardan en este navegador).
                   </div>
                   <form className="mt-4 grid gap-3" onSubmit={onSaveSupabaseConfig}>
-                    <label className="text-sm text-slate-700">
+                    <label className="text-sm text-slate-200">
                       URL de Supabase
                       <input
                         className={inputClass}
@@ -149,7 +157,7 @@ export default function AuthPage() {
                         autoComplete="off"
                       />
                     </label>
-                    <label className="text-sm text-slate-700">
+                    <label className="text-sm text-slate-200">
                       ANON key
                       <input
                         className={inputClass}
@@ -170,20 +178,20 @@ export default function AuthPage() {
             ) : null}
 
             {error ? (
-              <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+              <div className="mt-4 rounded-2xl border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
                 {error}
               </div>
             ) : null}
             {info ? (
-              <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              <div className="mt-4 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
                 {info}
               </div>
             ) : null}
 
             {pendingVerificationEmail ? (
-              <div className="mt-4 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
-                <div className="text-sm font-medium text-slate-900">Verificación de correo</div>
-                <div className="mt-2 text-sm text-slate-600">{pendingVerificationEmail}</div>
+              <div className="mt-4 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
+                <div className="text-sm font-medium text-slate-100">Verificación de correo</div>
+                <div className="mt-2 text-sm text-slate-300">{pendingVerificationEmail}</div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     onClick={() => onResendVerificationEmail(pendingVerificationEmail)}
@@ -198,10 +206,13 @@ export default function AuthPage() {
             ) : null}
           </div>
 
-          <form className="rounded-3xl bg-white p-6 ring-1 ring-slate-200" onSubmit={onLoginSubmit}>
-            <div className="text-xl font-semibold text-slate-950">Iniciar sesión</div>
+          <form
+            className="rounded-3xl bg-white/10 p-6 text-slate-100 shadow-[0_24px_80px_-50px_rgba(0,0,0,0.7)] ring-1 ring-white/15 backdrop-blur-xl"
+            onSubmit={onLoginSubmit}
+          >
+            <div className="text-xl font-semibold">Iniciar sesión</div>
             <div className="mt-4 grid gap-3">
-              <label className="text-sm text-slate-700">
+              <label className="text-sm text-slate-200">
                   Correo
                   <input
                     className={inputClass}
@@ -212,7 +223,7 @@ export default function AuthPage() {
                     autoComplete="email"
                   />
               </label>
-              <label className="text-sm text-slate-700">
+              <label className="text-sm text-slate-200">
                   Contraseña
                   <input
                     className={inputClass}
