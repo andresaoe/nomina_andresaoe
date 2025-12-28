@@ -10,8 +10,10 @@ export default function AuthPage() {
   const navigate = useNavigate()
   const session = useSession()
 
+  const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -22,6 +24,10 @@ export default function AuthPage() {
   const [supabaseAnonKeyInput, setSupabaseAnonKeyInput] = useState('')
 
   const canLogin = useMemo(() => email.includes('@') && password.length >= 8, [email, password])
+  const canRegister = useMemo(
+    () => email.includes('@') && password.length >= 8 && password === confirmPassword,
+    [confirmPassword, email, password],
+  )
 
   useEffect(() => {
     if (session.status === 'signed_in') navigate('/dashboard', { replace: true })
@@ -112,6 +118,47 @@ export default function AuthPage() {
     }
   }
 
+  async function onRegisterSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setInfo(null)
+
+    const supabase = getSupabase()
+    if (!supabase) {
+      setError('Servicio no disponible. Contacta al administrador.')
+      return
+    }
+
+    if (!canRegister) return
+
+    setLoading(true)
+    try {
+      const emailRedirectTo = `${window.location.origin}/auth/callback`
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo },
+      })
+      if (signUpError) {
+        setError(signUpError.message)
+        return
+      }
+
+      if (data.session) {
+        navigate('/dashboard', { replace: true })
+        return
+      }
+
+      setPendingVerificationEmail(email)
+      setPassword('')
+      setConfirmPassword('')
+      setInfo('Cuenta creada. Revisa tu correo para confirmar y luego inicia sesión.')
+      setMode('login')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const inputClass =
     'mt-1 w-full rounded-xl border border-white/15 bg-white/90 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 shadow-sm focus:outline-none focus:ring-2 focus:ring-fuchsia-400/30'
   const btnBase =
@@ -122,13 +169,13 @@ export default function AuthPage() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(1200px_circle_at_20%_10%,rgba(99,102,241,0.26),transparent_60%),radial-gradient(900px_circle_at_85%_20%,rgba(236,72,153,0.20),transparent_55%),radial-gradient(900px_circle_at_50%_90%,rgba(34,197,94,0.14),transparent_55%)]" />
-      <div className="pointer-events-none absolute inset-0 opacity-30 [background-image:radial-gradient(rgba(148,163,184,0.25)_1px,transparent_1px)] [background-size:24px_24px]" />
+      <div className="pointer-events-none absolute inset-0 opacity-30 bg-[radial-gradient(rgba(148,163,184,0.25)_1px,transparent_1px)] bg-size-[24px_24px]" />
 
       <div className="relative mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="rounded-3xl bg-white/10 p-6 text-slate-100 shadow-[0_24px_80px_-50px_rgba(0,0,0,0.7)] ring-1 ring-white/15 backdrop-blur-xl">
             <h1 className="text-xl font-semibold sm:text-2xl">
-              <span className="bg-gradient-to-r from-indigo-200 via-white to-fuchsia-200 bg-clip-text text-transparent">
+              <span className="bg-linear-to-r from-indigo-200 via-white to-fuchsia-200 bg-clip-text text-transparent">
                 Control de Nómina
               </span>
               <span className="block text-sm font-medium text-slate-300">by @andresaoe</span>
@@ -208,9 +255,44 @@ export default function AuthPage() {
 
           <form
             className="rounded-3xl bg-white/10 p-6 text-slate-100 shadow-[0_24px_80px_-50px_rgba(0,0,0,0.7)] ring-1 ring-white/15 backdrop-blur-xl"
-            onSubmit={onLoginSubmit}
+            onSubmit={mode === 'login' ? onLoginSubmit : onRegisterSubmit}
           >
-            <div className="text-xl font-semibold">Iniciar sesión</div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-xl font-semibold">{mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}</div>
+              <div className="flex rounded-full bg-white/5 p-1 ring-1 ring-white/10">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('login')
+                    setError(null)
+                    setInfo(null)
+                  }}
+                  className={
+                    mode === 'login'
+                      ? 'rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white'
+                      : 'rounded-full px-3 py-1 text-xs font-medium text-slate-300 hover:text-slate-100'
+                  }
+                >
+                  Entrar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('register')
+                    setPendingVerificationEmail(null)
+                    setError(null)
+                    setInfo(null)
+                  }}
+                  className={
+                    mode === 'register'
+                      ? 'rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white'
+                      : 'rounded-full px-3 py-1 text-xs font-medium text-slate-300 hover:text-slate-100'
+                  }
+                >
+                  Registrarme
+                </button>
+              </div>
+            </div>
             <div className="mt-4 grid gap-3">
               <label className="text-sm text-slate-200">
                   Correo
@@ -231,27 +313,49 @@ export default function AuthPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     type="password"
                     placeholder="Mínimo 8 caracteres"
-                    autoComplete="current-password"
+                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                   />
               </label>
+              {mode === 'register' ? (
+                <label className="text-sm text-slate-200">
+                  Confirmar contraseña
+                  <input
+                    className={inputClass}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    type="password"
+                    placeholder="Repite tu contraseña"
+                    autoComplete="new-password"
+                  />
+                </label>
+              ) : null}
               <div className="flex flex-wrap gap-2 pt-1">
-                <button type="submit" className={btnPrimary} disabled={!canLogin || loading || !supabaseReady}>
-                  {loading ? 'Entrando…' : 'Entrar'}
-                </button>
                 <button
-                  type="button"
-                  className={btnNeutral}
-                  disabled={loading || resending || !supabaseReady || !email.includes('@')}
-                  onClick={() => {
-                    setError(null)
-                    setInfo(null)
-                    setPendingVerificationEmail(email)
-                    setInfo('Listo. Ahora puedes reenviar la verificación.')
-                  }}
+                  type="submit"
+                  className={btnPrimary}
+                  disabled={(mode === 'login' ? !canLogin : !canRegister) || loading || !supabaseReady}
                 >
-                  No me llegó el correo de verificación
+                  {loading ? (mode === 'login' ? 'Entrando…' : 'Creando…') : mode === 'login' ? 'Entrar' : 'Crear cuenta'}
                 </button>
+                {mode === 'login' ? (
+                  <button
+                    type="button"
+                    className={btnNeutral}
+                    disabled={loading || resending || !supabaseReady || !email.includes('@')}
+                    onClick={() => {
+                      setError(null)
+                      setInfo(null)
+                      setPendingVerificationEmail(email)
+                      setInfo('Listo. Ahora puedes reenviar la verificación.')
+                    }}
+                  >
+                    No me llegó el correo de verificación
+                  </button>
+                ) : null}
               </div>
+              {mode === 'register' && password && confirmPassword && password !== confirmPassword ? (
+                <div className="text-xs text-rose-200">Las contraseñas no coinciden.</div>
+              ) : null}
             </div>
           </form>
         </div>

@@ -19,7 +19,9 @@ export default function KpiCard(props: {
   const valueColor = tone === 'good' ? 'text-emerald-700' : tone === 'warn' ? 'text-amber-700' : 'text-slate-950'
 
   return (
-    <div className={`rounded-2xl bg-white p-4 ring-1 ${tone === 'default' ? 'ring-slate-200' : ring}`}>
+    <div
+      className={`rounded-2xl bg-white/80 p-4 shadow-sm ring-1 backdrop-blur ${tone === 'default' ? 'ring-slate-200/70' : ring}`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-sm text-slate-600">{label}</div>

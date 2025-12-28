@@ -1349,14 +1349,14 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
   ] satisfies Array<{ id: NavId; label: string }>
 
   const inputClass =
-    'mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-950/20'
+    'mt-1 w-full rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2 text-sm text-slate-950 placeholder:text-slate-500 shadow-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20'
   const selectClass =
-    'mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-950/20'
-  const cardClass = 'rounded-2xl bg-white p-5 ring-1 ring-slate-200'
+    'mt-1 w-full rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2 text-sm text-slate-950 shadow-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20'
+  const cardClass = 'rounded-3xl bg-white/80 p-5 shadow-sm ring-1 ring-slate-200/70 backdrop-blur'
   const btnBase =
     'inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-slate-950/20 disabled:cursor-not-allowed disabled:opacity-50'
-  const btnPrimary = `${btnBase} bg-slate-950 text-white hover:bg-slate-900`
-  const btnNeutral = `${btnBase} bg-white text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50`
+  const btnPrimary = `${btnBase} bg-linear-to-r from-indigo-500 to-fuchsia-500 text-white shadow-sm hover:from-indigo-400 hover:to-fuchsia-400 focus:ring-white/30`
+  const btnNeutral = `${btnBase} bg-white/70 text-slate-900 shadow-sm ring-1 ring-slate-200/70 backdrop-blur hover:bg-white/90`
   const badgeBase = 'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium'
   const badgeTone = {
     normal: `${badgeBase} border-slate-200 bg-slate-50 text-slate-700`,
@@ -1380,13 +1380,13 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
           <span
             className={
               online
-                ? 'rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm text-emerald-700'
-                : 'rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm text-amber-800'
+                ? 'rounded-full border border-emerald-200/70 bg-emerald-50/80 px-3 py-1 text-sm text-emerald-800 shadow-sm backdrop-blur'
+                : 'rounded-full border border-amber-200/70 bg-amber-50/80 px-3 py-1 text-sm text-amber-900 shadow-sm backdrop-blur'
             }
           >
             {online ? 'Online' : 'Offline'}
           </span>
-          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700">
+          <span className="rounded-full border border-slate-200/70 bg-white/70 px-3 py-1 text-sm text-slate-700 shadow-sm backdrop-blur">
             Pendientes: {pendingCount}
           </span>
           <button type="button" className={btnNeutral} onClick={onSignOut}>
@@ -1397,12 +1397,12 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
     >
       <div className="grid gap-6">
         {error ? (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+          <div className="rounded-2xl border border-rose-200/70 bg-rose-50/80 px-4 py-3 text-sm text-rose-900 shadow-sm backdrop-blur">
             {error}
           </div>
         ) : null}
         {info ? (
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-900 shadow-sm backdrop-blur">
             {info}
           </div>
         ) : null}
