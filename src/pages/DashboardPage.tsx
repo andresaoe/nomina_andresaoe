@@ -1323,35 +1323,7 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
       setPendingCount(await countUnsyncedLocalShiftEntries(currentUserId))
       setPreview(calculations)
 
-      {
-        const refreshed = await listRecentLocalShiftEntries(currentUserId, 60)
-        setSaved(
-          refreshed.map((r) => ({
-            id: r.id,
-            work_date: r.work_date,
-            shift: r.shift,
-            novelty: r.novelty,
-            total_pay_cop: r.total_pay_cop,
-            breakdown: r.breakdown,
-            created_at: r.created_at,
-          })),
-        )
-      }
-
-      {
-        const { start, end } = monthBounds(selectedMonthPrefix)
-        const refreshedMonth = await listLocalShiftEntriesForRange(currentUserId, start, end)
-        setMonthRows(
-          refreshedMonth
-            .sort((a, b) => (a.work_date < b.work_date ? -1 : a.work_date > b.work_date ? 1 : 0))
-            .map((r) => ({
-              work_date: r.work_date,
-              novelty: r.novelty,
-              total_pay_cop: r.total_pay_cop,
-              breakdown: r.breakdown,
-            })),
-        )
-      }
+      await refreshTurnosData()
 
       if (!online || !supabase) {
         setInfo('Sin conexión: turnos guardados en el dispositivo para sincronizar luego.')
