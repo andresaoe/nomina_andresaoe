@@ -28,6 +28,7 @@ import {
 import { isColombiaHoliday } from '../lib/payroll/colombiaHolidays'
 import type { NoveltyType, ShiftCalcBreakdown, ShiftCalculation, ShiftType } from '../lib/payroll/types'
 import type { DeductionItem, EarningItem, MonthSummary } from '../lib/payroll/payrollCalculator'
+import { readJson } from '../lib/storage'
 
 type SavedRow = {
   id: string
@@ -159,6 +160,17 @@ export default function DashboardPage() {
   const [applySolidarityFund, setApplySolidarityFund] = useState(true)
   const [ibcMinSmmlv, setIbcMinSmmlv] = useState<number>(1)
   const [ibcMaxSmmlv, setIbcMaxSmmlv] = useState<number>(25)
+  const [arlPct, setArlPct] = useState<number>(0.5)
+  const [cajaPct, setCajaPct] = useState<number>(4)
+  const [icbfPct, setIcbfPct] = useState<number>(3)
+  const [senaPct, setSenaPct] = useState<number>(2)
+  const [cesantiasPct, setCesantiasPct] = useState<number>(8.33)
+  const [interesesCesantiasPct, setInteresesCesantiasPct] = useState<number>(1)
+  const [primaPct, setPrimaPct] = useState<number>(8.33)
+  const [vacacionesPct, setVacacionesPct] = useState<number>(4.17)
+  const [retentionPct, setRetentionPct] = useState<number>(0)
+  const [applyConnectivityAllowance, setApplyConnectivityAllowance] = useState<boolean>(false)
+  const [connectivityAllowanceCop, setConnectivityAllowanceCop] = useState<number>(0)
 
   const [savingConfig, setSavingConfig] = useState(false)
 
@@ -189,7 +201,7 @@ export default function DashboardPage() {
   const [rowsLoadError, setRowsLoadError] = useState<string | null>(null)
   const [monthLoadError, setMonthLoadError] = useState<string | null>(null)
 
-  type NavId = 'resumen' | 'turnos' | 'reportes' | 'config' | 'datos'
+  type NavId = 'resumen' | 'turnos' | 'reportes' | 'estadisticas' | 'config' | 'datos'
   const [activeNavId, setActiveNavId] = useState<NavId>('resumen')
   const [pendingCount, setPendingCount] = useState(0)
   const [reportsLoading, setReportsLoading] = useState(false)
@@ -300,6 +312,20 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
       setApplyStandardDeductions(meta.apply_standard_deductions)
     if (typeof meta.health_pct === 'number') setHealthPct(meta.health_pct * 100)
     if (typeof meta.pension_pct === 'number') setPensionPct(meta.pension_pct * 100)
+    if (typeof meta.arl_pct === 'number') setArlPct((meta.arl_pct ?? 0.005) * 100)
+    if (typeof meta.caja_pct === 'number') setCajaPct((meta.caja_pct ?? 0.04) * 100)
+    if (typeof meta.icbf_pct === 'number') setIcbfPct((meta.icbf_pct ?? 0.03) * 100)
+    if (typeof meta.sena_pct === 'number') setSenaPct((meta.sena_pct ?? 0.02) * 100)
+    if (typeof meta.cesantias_pct === 'number') setCesantiasPct((meta.cesantias_pct ?? 0.0833) * 100)
+    if (typeof meta.intereses_cesantias_pct === 'number')
+      setInteresesCesantiasPct((meta.intereses_cesantias_pct ?? 0.01) * 100)
+    if (typeof meta.prima_pct === 'number') setPrimaPct((meta.prima_pct ?? 0.0833) * 100)
+    if (typeof meta.vacaciones_pct === 'number') setVacacionesPct((meta.vacaciones_pct ?? 0.0417) * 100)
+    if (typeof meta.retention_pct === 'number') setRetentionPct((meta.retention_pct ?? 0) * 100)
+    if (typeof meta.apply_connectivity_allowance === 'boolean')
+      setApplyConnectivityAllowance(meta.apply_connectivity_allowance)
+    if (typeof meta.connectivity_allowance_cop === 'number')
+      setConnectivityAllowanceCop(meta.connectivity_allowance_cop)
 
     const metaEarnings = Array.isArray(meta.earnings_items) ? (meta.earnings_items as EarningItem[]) : null
     const metaDeductions = Array.isArray(meta.deduction_items) ? (meta.deduction_items as DeductionItem[]) : null
@@ -560,6 +586,17 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
       applySolidarityFund,
       ibcMinSmmlv,
       ibcMaxSmmlv,
+      arlPct: arlPct / 100,
+      cajaPct: cajaPct / 100,
+      icbfPct: icbfPct / 100,
+      senaPct: senaPct / 100,
+      cesantiasPct: cesantiasPct / 100,
+      interesesCesantiasPct: interesesCesantiasPct / 100,
+      primaPct: primaPct / 100,
+      vacacionesPct: vacacionesPct / 100,
+      retentionPct: retentionPct / 100,
+      applyConnectivityAllowance,
+      connectivityAllowanceCop,
     }
 
     return summarizeMonth(monthEntries, config)
@@ -575,6 +612,17 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
     ibcMinSmmlv,
     monthEntries,
     pensionPct,
+    arlPct,
+    cajaPct,
+    icbfPct,
+    senaPct,
+    cesantiasPct,
+    interesesCesantiasPct,
+    primaPct,
+    vacacionesPct,
+    retentionPct,
+    applyConnectivityAllowance,
+    connectivityAllowanceCop,
     selectedMonthPrefix,
     smmlvCop,
     transportAllowanceCop,
@@ -605,6 +653,17 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
           applySolidarityFund,
           ibcMinSmmlv,
           ibcMaxSmmlv,
+          arlPct: arlPct / 100,
+          cajaPct: cajaPct / 100,
+          icbfPct: icbfPct / 100,
+          senaPct: senaPct / 100,
+          cesantiasPct: cesantiasPct / 100,
+          interesesCesantiasPct: interesesCesantiasPct / 100,
+          primaPct: primaPct / 100,
+          vacacionesPct: vacacionesPct / 100,
+          retentionPct: retentionPct / 100,
+          applyConnectivityAllowance,
+          connectivityAllowanceCop,
         }
 
         const sixMonths = Array.from({ length: 6 }, (_, i) => addMonthsToPrefix(selectedMonthPrefix, -(5 - i)))
@@ -668,6 +727,17 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
     ibcMaxSmmlv,
     ibcMinSmmlv,
     pensionPct,
+    arlPct,
+    cajaPct,
+    icbfPct,
+    senaPct,
+    cesantiasPct,
+    interesesCesantiasPct,
+    primaPct,
+    vacacionesPct,
+    retentionPct,
+    applyConnectivityAllowance,
+    connectivityAllowanceCop,
     reportYear,
     selectedMonthPrefix,
     smmlvCop,
@@ -680,10 +750,12 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
     if (!months.length) return null
     const sumNet = months.reduce((acc, m) => acc + (m.netPayCop || 0), 0)
     const sumGross = months.reduce((acc, m) => acc + (m.grossPayCop || 0), 0)
+    const sumEmployer = months.reduce((acc, m) => acc + (m.employerCostCop || 0), 0)
     const sumShifts = months.reduce((acc, m) => acc + (m.shiftsCount || 0), 0)
     return {
       avgNetCop: roundCop(sumNet / months.length),
       avgGrossCop: roundCop(sumGross / months.length),
+      avgEmployerCop: roundCop(sumEmployer / months.length),
       avgShifts: Number((sumShifts / months.length).toFixed(2)),
     }
   }, [sixMonthSummaries])
@@ -708,6 +780,39 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
     const months = yearSummaries ?? []
     return months.map((m) => ({ label: m.monthISO.slice(5), value: m.netPayCop || 0 }))
   }, [yearSummaries])
+
+  const expensesVsIncomePoints = useMemo(() => {
+    const EXPENSES_KEY = 'cn_expenses_v1'
+    const all = readJson<Array<{ dateISO: string; amountCop: number }>>(EXPENSES_KEY) ?? []
+    const monthPrefix = selectedMonthPrefix
+    const monthTotalExpenses = all
+      .filter((e) => e.dateISO.startsWith(monthPrefix))
+      .reduce((acc, e) => acc + (e.amountCop || 0), 0)
+    const net = monthSummary?.netPayCop ?? 0
+    return [
+      { label: 'Ingreso neto', value: net },
+      { label: 'Gastos', value: monthTotalExpenses },
+    ]
+  }, [selectedMonthPrefix, monthSummary])
+
+  const overtimeTypePoints = useMemo(() => {
+    if (!monthSummary) return []
+    return [
+      { label: 'Extra diurna', value: monthSummary.overtimeDay || 0 },
+      { label: 'Extra nocturna', value: monthSummary.overtimeNight || 0 },
+      { label: 'Extra dom/fest diurna', value: monthSummary.overtimeSundayOrHolidayDay || 0 },
+      { label: 'Extra dom/fest nocturna', value: monthSummary.overtimeSundayOrHolidayNight || 0 },
+    ]
+  }, [monthSummary])
+
+  const surchargeTypePoints = useMemo(() => {
+    if (!monthSummary) return []
+    return [
+      { label: 'Nocturnas', value: monthSummary.hoursNight || 0 },
+      { label: 'Dom/Fest diurnas', value: monthSummary.hoursSundayOrHolidayDay || 0 },
+      { label: 'Dom/Fest nocturnas', value: monthSummary.hoursSundayOrHolidayNight || 0 },
+    ]
+  }, [monthSummary])
 
   const openPrintWindow = useCallback(
     (title: string, bodyHtml: string) => {
@@ -737,7 +842,8 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
       th { font-size: 11px; text-transform: uppercase; color: #475569; }
       .muted { color: #64748b; }
       .right { text-align: right; }
-      @media print { body { margin: 0; } .no-print { display: none; } }
+      .print-sticky { position: fixed; top: 0; right: 24px; width: 280px; background: #fff; z-index: 999; }
+      @media print { body { margin: 0; padding-top: 220px; } .no-print { display: none; } }
     </style>
   </head>
   <body>
@@ -759,25 +865,93 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
       setError('No hay datos del mes para generar la planilla.')
       return
     }
+    const totalBase = Math.max(1, monthSummary.basePayCop || 0)
+    const provisionsMonthlyTotal =
+      (monthSummary.cesantiasCop || 0) +
+      (monthSummary.interesesCesantiasCop || 0) +
+      (monthSummary.primaCop || 0) +
+      (monthSummary.vacacionesCop || 0)
+    const employerMonthlyTotal =
+      (monthSummary.arlCop || 0) +
+      (monthSummary.cajaCop || 0) +
+      (monthSummary.icbfCop || 0) +
+      (monthSummary.senaCop || 0)
     const rows = monthEntries.slice().sort((a, b) => (a.workDateISO < b.workDateISO ? -1 : a.workDateISO > b.workDateISO ? 1 : 0))
-    const detailsRows = rows
-      .map((r) => {
-        const badge = dayBadge(r.workDateISO, r.breakdown)
-        const b = r.breakdown
-        const hours =
-          (b.hoursDay || 0) +
-          (b.hoursNight || 0) +
-          (b.hoursSundayOrHolidayDay || 0) +
-          (b.hoursSundayOrHolidayNight || 0) +
-          (b.overtimeHoursTotal || 0)
-        return `<tr>
-  <td>${escapeHtml(r.workDateISO)}<div class="muted">${escapeHtml(badge.label)} · ${escapeHtml(noveltyLabel(r.novelty))}</div></td>
-  <td class="right">${escapeHtml(String(hours))}</td>
-  <td class="right">${escapeHtml(formatCop(r.totalPayCop || 0))}</td>
-</tr>`
-      })
+    const details = rows.map((r) => {
+      const badge = dayBadge(r.workDateISO, r.breakdown)
+      const b = r.breakdown
+      const hours =
+        (b.hoursDay || 0) +
+        (b.hoursNight || 0) +
+        (b.hoursSundayOrHolidayDay || 0) +
+        (b.hoursSundayOrHolidayNight || 0) +
+        (b.overtimeHoursTotal || 0)
+      const share = (b.basePayCop || 0) / totalBase
+      const perDayProvisions = roundCop(provisionsMonthlyTotal * share)
+      const perDayEmployer = roundCop(employerMonthlyTotal * share)
+      const auxEligible =
+        r.novelty === 'normal' ||
+        r.novelty === 'licencia_remunerada' ||
+        r.novelty === 'dia_familia' ||
+        r.novelty === 'cumpleanos'
+      const connectivityMonthlyTotal = monthSummary.connectivityAllowanceCop || 0
+      const prorationDays = Math.max(1, monthSummary.transportProrationDays || 0)
+      const perDayConnectivity = auxEligible ? roundCop(connectivityMonthlyTotal / prorationDays) : 0
+      const transportMonthlyTotal = monthSummary.transportAllowanceCop || 0
+      const perDayTransport = auxEligible ? roundCop(transportMonthlyTotal / prorationDays) : 0
+      const perDaySalary = roundCop(b.basePayCop || 0)
+      return {
+        dateISO: r.workDateISO,
+        badgeLabel: badge.label,
+        novelty: r.novelty,
+        hours,
+        total: r.totalPayCop || 0,
+        salary: perDaySalary,
+        provisions: perDayProvisions,
+        employer: perDayEmployer,
+        transport: perDayTransport,
+        connectivity: perDayConnectivity,
+      }
+    })
+    const detailsRows = details
+      .map(
+        (d) => `<tr>
+  <td>${escapeHtml(d.dateISO)}<div class="muted">${escapeHtml(d.badgeLabel)} · ${escapeHtml(noveltyLabel(d.novelty))}</div></td>
+  <td class="right">${escapeHtml(String(d.hours))}</td>
+  <td class="right">${escapeHtml(formatCop(d.total))}</td>
+  <td class="right">${escapeHtml(formatCop(d.salary))}</td>
+  <td class="right">${escapeHtml(formatCop(d.provisions))}</td>
+  <td class="right">${escapeHtml(formatCop(d.employer))}</td>
+  <td class="right">${escapeHtml(formatCop(d.transport))}</td>
+  <td class="right">${escapeHtml(formatCop(d.connectivity))}</td>
+</tr>`,
+      )
       .join('')
+    const totals = details.reduce(
+      (acc, d) => {
+        acc.hours += d.hours || 0
+        acc.total += d.total || 0
+        acc.salary += d.salary || 0
+        acc.provisions += d.provisions || 0
+        acc.employer += d.employer || 0
+        acc.transport += d.transport || 0
+        acc.connectivity += d.connectivity || 0
+        return acc
+      },
+      { hours: 0, total: 0, salary: 0, provisions: 0, employer: 0, transport: 0, connectivity: 0 },
+    )
+    const totalsRow = `<tr>
+  <td><b>Totales</b></td>
+  <td class="right"><b>${escapeHtml(String(totals.hours))}</b></td>
+  <td class="right"><b>${escapeHtml(formatCop(totals.total))}</b></td>
+  <td class="right"><b>${escapeHtml(formatCop(totals.salary))}</b></td>
+  <td class="right"><b>${escapeHtml(formatCop(totals.provisions))}</b></td>
+  <td class="right"><b>${escapeHtml(formatCop(totals.employer))}</b></td>
+  <td class="right"><b>${escapeHtml(formatCop(totals.transport))}</b></td>
+  <td class="right"><b>${escapeHtml(formatCop(totals.connectivity))}</b></td>
+</tr>`
 
+    const provisionsTotal = provisionsMonthlyTotal
     const body = `
 <h1>Planilla de pago mensual · ${escapeHtml(selectedMonthPrefix)}</h1>
 <p class="sub">${escapeHtml(currentUserEmail)}</p>
@@ -787,7 +961,11 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
     <div class="row"><span>Días únicos</span><b>${escapeHtml(String(monthSummary.uniqueDays))}</b></div>
     <div class="row"><span>Devengado (turnos)</span><b>${escapeHtml(formatCop(monthSummary.shiftPayCop))}</b></div>
     <div class="row"><span>Auxilio transporte</span><b>${escapeHtml(formatCop(monthSummary.transportAllowanceCop))}</b></div>
+    <div class="row"><span>Auxilio conectividad</span><b>${escapeHtml(formatCop(monthSummary.connectivityAllowanceCop || 0))}</b></div>
     <div class="row"><span>Bruto</span><b>${escapeHtml(formatCop(monthSummary.grossPayCop))}</b></div>
+    <div class="row"><span>Costo empresa</span><b>${escapeHtml(formatCop(monthSummary.employerCostCop || 0))}</b></div>
+    <div class="row"><span>Provisiones</span><b>${escapeHtml(formatCop(provisionsTotal))}</b></div>
+    <div class="row"><span>Retención (estimada)</span><b>${escapeHtml(formatCop(monthSummary.retencionCop || 0))}</b></div>
   </div>
   <div class="card">
     <div class="row"><span>Salud</span><b>${escapeHtml(formatCop(monthSummary.healthCop))}</b></div>
@@ -797,22 +975,83 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
     <div class="row"><span>Deducciones</span><b>${escapeHtml(formatCop(monthSummary.totalDeductionsCop))}</b></div>
     <div class="row"><span>Neto a pagar</span><b>${escapeHtml(formatCop(monthSummary.netPayCop))}</b></div>
   </div>
+  <div class="card">
+    <div class="row"><span>Cesantías</span><b>${escapeHtml(formatCop(monthSummary.cesantiasCop || 0))}</b></div>
+    <div class="row"><span>Intereses cesantías</span><b>${escapeHtml(formatCop(monthSummary.interesesCesantiasCop || 0))}</b></div>
+    <div class="row"><span>Prima</span><b>${escapeHtml(formatCop(monthSummary.primaCop || 0))}</b></div>
+    <div class="row"><span>Vacaciones</span><b>${escapeHtml(formatCop(monthSummary.vacacionesCop || 0))}</b></div>
+  </div>
+  <div class="card">
+    <div class="row"><span>ARL</span><b>${escapeHtml(formatCop(monthSummary.arlCop || 0))}</b></div>
+    <div class="row"><span>Caja</span><b>${escapeHtml(formatCop(monthSummary.cajaCop || 0))}</b></div>
+    <div class="row"><span>ICBF</span><b>${escapeHtml(formatCop(monthSummary.icbfCop || 0))}</b></div>
+    <div class="row"><span>SENA</span><b>${escapeHtml(formatCop(monthSummary.senaCop || 0))}</b></div>
+  </div>
+  <div class="card">
+    <div class="row"><span>Parámetros (tasas)</span><b></b></div>
+    <div class="row"><span>Salud</span><b>${escapeHtml(String(healthPct))}%</b></div>
+    <div class="row"><span>Pensión</span><b>${escapeHtml(String(pensionPct))}%</b></div>
+    <div class="row"><span>ARL</span><b>${escapeHtml(String(arlPct))}%</b></div>
+    <div class="row"><span>Caja</span><b>${escapeHtml(String(cajaPct))}%</b></div>
+    <div class="row"><span>ICBF</span><b>${escapeHtml(String(icbfPct))}%</b></div>
+    <div class="row"><span>SENA</span><b>${escapeHtml(String(senaPct))}%</b></div>
+    <div class="row"><span>Cesantías</span><b>${escapeHtml(String(cesantiasPct))}%</b></div>
+    <div class="row"><span>Intereses cesantías</span><b>${escapeHtml(String(interesesCesantiasPct))}%</b></div>
+    <div class="row"><span>Prima</span><b>${escapeHtml(String(primaPct))}%</b></div>
+    <div class="row"><span>Vacaciones</span><b>${escapeHtml(String(vacacionesPct))}%</b></div>
+    <div class="row"><span>Retención</span><b>${escapeHtml(String(retentionPct))}%</b></div>
+  </div>
 </div>
-<table>
-  <thead>
-    <tr>
-      <th>Fecha</th>
-      <th class="right">Horas</th>
-      <th class="right">Total</th>
-    </tr>
-  </thead>
-  <tbody>
-    ${detailsRows || '<tr><td colspan="3" class="muted">Sin registros en el mes.</td></tr>'}
-  </tbody>
-</table>
+  <div class="grid">
+    <div>
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th class="right">Horas</th>
+            <th class="right">Total</th>
+            <th class="right">Salario</th>
+            <th class="right">Prov.</th>
+            <th class="right">Empresa</th>
+            <th class="right">Transp.</th>
+            <th class="right">Conect.</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(detailsRows && detailsRows.length ? detailsRows : '<tr><td colspan="8" class="muted">Sin registros en el mes.</td></tr>') + totalsRow}
+        </tbody>
+      </table>
+    </div>
+    <div class="card print-sticky">
+      <div class="row"><span>Horas totales</span><b>${escapeHtml(String(totals.hours))}</b></div>
+      <div class="row"><span>Total</span><b>${escapeHtml(formatCop(totals.total))}</b></div>
+      <div class="row"><span>Salario</span><b>${escapeHtml(formatCop(totals.salary))}</b></div>
+      <div class="row"><span>Provisiones</span><b>${escapeHtml(formatCop(totals.provisions))}</b></div>
+      <div class="row"><span>Empresa</span><b>${escapeHtml(formatCop(totals.employer))}</b></div>
+      <div class="row"><span>Transporte</span><b>${escapeHtml(formatCop(totals.transport))}</b></div>
+      <div class="row"><span>Conectividad</span><b>${escapeHtml(formatCop(totals.connectivity))}</b></div>
+    </div>
+  </div>
 `
     openPrintWindow(`Planilla ${selectedMonthPrefix}`, body)
-  }, [currentUserEmail, monthEntries, monthSummary, openPrintWindow, selectedMonthPrefix])
+  }, [
+    currentUserEmail,
+    monthEntries,
+    monthSummary,
+    openPrintWindow,
+    selectedMonthPrefix,
+    healthPct,
+    pensionPct,
+    arlPct,
+    cajaPct,
+    icbfPct,
+    senaPct,
+    cesantiasPct,
+    interesesCesantiasPct,
+    primaPct,
+    vacacionesPct,
+    retentionPct,
+  ])
 
   const onDownloadAnnualPdf = useCallback(() => {
     const months = yearSummaries ?? []
@@ -832,6 +1071,16 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
       )
       .join('')
 
+    const sumEmployer = months.reduce((acc, m) => acc + (m.employerCostCop || 0), 0)
+    const sumProvisions = months.reduce(
+      (acc, m) =>
+        acc +
+        ((m.cesantiasCop || 0) +
+          (m.interesesCesantiasCop || 0) +
+          (m.primaCop || 0) +
+          (m.vacacionesCop || 0)),
+      0,
+    )
     const body = `
 <h1>Reporte anual de nómina · ${escapeHtml(String(reportYear))}</h1>
 <p class="sub">${escapeHtml(currentUserEmail)}</p>
@@ -845,6 +1094,8 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
   <div class="card">
     <div class="row"><span>Periodo</span><b>${escapeHtml(String(reportYear))}-01 a ${escapeHtml(String(reportYear))}-12</b></div>
     <div class="row"><span>Generado</span><b>${escapeHtml(new Date().toISOString().slice(0, 10))}</b></div>
+    <div class="row"><span>Costo empresa (acumulado)</span><b>${escapeHtml(formatCop(sumEmployer))}</b></div>
+    <div class="row"><span>Provisiones (acumulado)</span><b>${escapeHtml(formatCop(sumProvisions))}</b></div>
   </div>
 </div>
 <table>
@@ -964,6 +1215,24 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
       setError('IBC mínimo/máximo inválido.')
       return
     }
+    if (
+      arlPct < 0 ||
+      cajaPct < 0 ||
+      icbfPct < 0 ||
+      senaPct < 0 ||
+      cesantiasPct < 0 ||
+      interesesCesantiasPct < 0 ||
+      primaPct < 0 ||
+      vacacionesPct < 0 ||
+      retentionPct < 0
+    ) {
+      setError('Los porcentajes no pueden ser negativos.')
+      return
+    }
+    if (connectivityAllowanceCop < 0) {
+      setError('El auxilio de conectividad debe ser un entero positivo.')
+      return
+    }
 
     setSavingConfig(true)
     try {
@@ -984,6 +1253,17 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
           apply_solidarity_fund: applySolidarityFund,
           ibc_min_smmlv: ibcMinSmmlv,
           ibc_max_smmlv: ibcMaxSmmlv,
+          arl_pct: arlPct / 100,
+          caja_pct: cajaPct / 100,
+          icbf_pct: icbfPct / 100,
+          sena_pct: senaPct / 100,
+          cesantias_pct: cesantiasPct / 100,
+          intereses_cesantias_pct: interesesCesantiasPct / 100,
+          prima_pct: primaPct / 100,
+          vacaciones_pct: vacacionesPct / 100,
+          retention_pct: retentionPct / 100,
+          apply_connectivity_allowance: applyConnectivityAllowance,
+          connectivity_allowance_cop: connectivityAllowanceCop,
         },
       })
       if (updateError) setError(updateError.message)
@@ -1355,6 +1635,7 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
     { id: 'resumen', label: 'Resumen' },
     { id: 'turnos', label: 'Turnos' },
     { id: 'reportes', label: 'Reportes' },
+    { id: 'estadisticas', label: 'Estadísticas' },
     { id: 'config', label: 'Configuración' },
     ...(isAdmin ? [{ id: 'datos' as const, label: 'Datos y SQL' }] : []),
   ] satisfies Array<{ id: NavId; label: string }>
@@ -2124,6 +2405,56 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
                     <input className={inputClass} value={ibcMaxSmmlv} onChange={(e) => setIbcMaxSmmlv(Number(e.target.value) || 25)} inputMode="numeric" placeholder="25" />
                   </label>
                 </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="text-sm text-slate-700">
+                    ARL (%)
+                    <input className={inputClass} value={arlPct} onChange={(e) => setArlPct(Number(e.target.value) || 0)} inputMode="numeric" placeholder="0.5" />
+                  </label>
+                  <label className="text-sm text-slate-700">
+                    Caja (%)
+                    <input className={inputClass} value={cajaPct} onChange={(e) => setCajaPct(Number(e.target.value) || 0)} inputMode="numeric" placeholder="4" />
+                  </label>
+                  <label className="text-sm text-slate-700">
+                    ICBF (%)
+                    <input className={inputClass} value={icbfPct} onChange={(e) => setIcbfPct(Number(e.target.value) || 0)} inputMode="numeric" placeholder="3" />
+                  </label>
+                  <label className="text-sm text-slate-700">
+                    SENA (%)
+                    <input className={inputClass} value={senaPct} onChange={(e) => setSenaPct(Number(e.target.value) || 0)} inputMode="numeric" placeholder="2" />
+                  </label>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="text-sm text-slate-700">
+                    Cesantías (%)
+                    <input className={inputClass} value={cesantiasPct} onChange={(e) => setCesantiasPct(Number(e.target.value) || 0)} inputMode="numeric" placeholder="8.33" />
+                  </label>
+                  <label className="text-sm text-slate-700">
+                    Intereses cesantías (%)
+                    <input className={inputClass} value={interesesCesantiasPct} onChange={(e) => setInteresesCesantiasPct(Number(e.target.value) || 0)} inputMode="numeric" placeholder="1" />
+                  </label>
+                  <label className="text-sm text-slate-700">
+                    Prima (%)
+                    <input className={inputClass} value={primaPct} onChange={(e) => setPrimaPct(Number(e.target.value) || 0)} inputMode="numeric" placeholder="8.33" />
+                  </label>
+                  <label className="text-sm text-slate-700">
+                    Vacaciones (%)
+                    <input className={inputClass} value={vacacionesPct} onChange={(e) => setVacacionesPct(Number(e.target.value) || 0)} inputMode="numeric" placeholder="4.17" />
+                  </label>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="text-sm text-slate-700">
+                    Retención (%) estimada
+                    <input className={inputClass} value={retentionPct} onChange={(e) => setRetentionPct(Number(e.target.value) || 0)} inputMode="numeric" placeholder="0" />
+                  </label>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input type="checkbox" checked={applyConnectivityAllowance} onChange={(e) => setApplyConnectivityAllowance(e.target.checked)} />
+                  Aplicar auxilio de conectividad (si no aplica transporte)
+                </label>
+                <label className="text-sm text-slate-700">
+                  Auxilio de conectividad mensual (COP)
+                  <input className={inputClass} value={connectivityAllowanceCop} onChange={(e) => setConnectivityAllowanceCop(Number(e.target.value.replace(/[^\d]/g, '')) || 0)} inputMode="numeric" placeholder="0" />
+                </label>
 
                 <div className="flex flex-wrap items-center gap-3 pt-1">
                   <button type="button" className={btnPrimary} onClick={onSavePayrollConfig} disabled={savingConfig || !baseSalaryCop}>
@@ -2139,6 +2470,44 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
               <div className="mt-2 text-sm text-slate-600">Datos usados: dispositivo + nube</div>
               <div className="mt-4">
                 {!dailyPayPoints.length ? <div className="text-sm text-slate-600">Aún no hay datos.</div> : <SimpleBarChart points={dailyPayPoints} />}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {activeNavId === 'estadisticas' ? (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className={cardClass}>
+              <div className="text-base font-semibold text-slate-950">Horas extra por tipo</div>
+              <div className="mt-2 text-sm text-slate-600">Distribución mensual de horas extra.</div>
+              <div className="mt-4">
+                {!overtimeTypePoints.length ? (
+                  <div className="text-sm text-slate-600">Aún no hay datos.</div>
+                ) : (
+                  <SimpleBarChart points={overtimeTypePoints} />
+                )}
+              </div>
+            </div>
+            <div className={cardClass}>
+              <div className="text-base font-semibold text-slate-950">Recargos por tipo</div>
+              <div className="mt-2 text-sm text-slate-600">Horas con recargo (nocturno, dom/fest).</div>
+              <div className="mt-4">
+                {!surchargeTypePoints.length ? (
+                  <div className="text-sm text-slate-600">Aún no hay datos.</div>
+                ) : (
+                  <SimpleBarChart points={surchargeTypePoints} />
+                )}
+              </div>
+            </div>
+            <div className={cardClass}>
+              <div className="text-base font-semibold text-slate-950">Ingresos vs gastos</div>
+              <div className="mt-2 text-sm text-slate-600">Comparación del mes actual.</div>
+              <div className="mt-4">
+                {!expensesVsIncomePoints.length ? (
+                  <div className="text-sm text-slate-600">Aún no hay datos.</div>
+                ) : (
+                  <SimpleBarChart points={expensesVsIncomePoints} />
+                )}
               </div>
             </div>
           </div>
@@ -2160,7 +2529,7 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
               {!monthSummary ? (
                 <div className="mt-4 text-sm text-slate-600">Aún no hay datos del mes para generar la planilla.</div>
               ) : (
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                     <div className="text-xs text-slate-600">Neto</div>
                     <div className="mt-1 text-lg font-semibold text-slate-950">{formatCop(monthSummary.netPayCop || 0)}</div>
@@ -2176,6 +2545,18 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
                   <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
                     <div className="text-xs text-slate-600">Días únicos</div>
                     <div className="mt-1 text-lg font-semibold text-slate-950">{monthSummary.uniqueDays}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <div className="text-xs text-slate-600">Costo empresa</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{formatCop(monthSummary.employerCostCop || 0)}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <div className="text-xs text-slate-600">Provisiones</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{formatCop((monthSummary.cesantiasCop || 0) + (monthSummary.interesesCesantiasCop || 0) + (monthSummary.primaCop || 0) + (monthSummary.vacacionesCop || 0))}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <div className="text-xs text-slate-600">Retención (estimada)</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{formatCop(monthSummary.retencionCop || 0)}</div>
                   </div>
                 </div>
               )}
@@ -2207,6 +2588,10 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
                   <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
                     <div className="text-xs text-slate-600">Turnos promedio</div>
                     <div className="mt-1 text-lg font-semibold text-slate-950">{sixMonthAvg.avgShifts}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 sm:col-span-3">
+                    <div className="text-xs text-slate-600">Costo empresa promedio</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{formatCop(sixMonthAvg.avgEmployerCop)}</div>
                   </div>
                 </div>
               )}

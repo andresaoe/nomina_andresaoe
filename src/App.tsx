@@ -4,6 +4,7 @@ import AuthCallbackPage from './pages/AuthCallbackPage'
 import AuthPage from './pages/AuthPage'
 import DashboardPage from './pages/DashboardPage'
 import WelcomePage from './pages/WelcomePage'
+import ExpensesPage from './pages/ExpensesPage'
 
 function App() {
   return (
@@ -11,6 +12,7 @@ function App() {
       <Route path="/" element={<WelcomePage />} />
       <Route path="/auth" element={<AuthPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      <Route path="/gastos" element={<ExpensesPage />} />
       <Route
         path="/dashboard"
         element={

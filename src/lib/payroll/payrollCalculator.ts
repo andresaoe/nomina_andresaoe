@@ -556,6 +556,17 @@ export type MonthSummaryConfig = {
   applySolidarityFund: boolean
   ibcMinSmmlv: number
   ibcMaxSmmlv: number
+  arlPct?: number
+  cajaPct?: number
+  icbfPct?: number
+  senaPct?: number
+  cesantiasPct?: number
+  interesesCesantiasPct?: number
+  primaPct?: number
+  vacacionesPct?: number
+  retentionPct?: number
+  applyConnectivityAllowance?: boolean
+  connectivityAllowanceCop?: number
 }
 
 export type MonthSummary = {
@@ -568,6 +579,7 @@ export type MonthSummary = {
   transportEligible: boolean
   transportProrationDays: number
   transportAllowanceCop: number
+  connectivityAllowanceCop: number
   salaryEarningsCop: number
   nonSalaryEarningsCop: number
   grossPayCop: number
@@ -575,9 +587,19 @@ export type MonthSummary = {
   healthCop: number
   pensionCop: number
   solidarityFundCop: number
+  retencionCop: number
   otherDeductionsCop: number
   totalDeductionsCop: number
   netPayCop: number
+  cesantiasCop: number
+  interesesCesantiasCop: number
+  primaCop: number
+  vacacionesCop: number
+  arlCop: number
+  cajaCop: number
+  icbfCop: number
+  senaCop: number
+  employerCostCop: number
   hoursDay: number
   hoursNight: number
   hoursSundayOrHolidayDay: number
@@ -678,6 +700,10 @@ export function summarizeMonth(
   const transportAllowanceCop = transportEligible
     ? roundCop(config.transportAllowanceCop * (transportProrationDays / 30))
     : 0
+  const connectivityAllowanceCop =
+    !transportEligible && (config.applyConnectivityAllowance ?? false)
+      ? roundCop((config.connectivityAllowanceCop ?? 0) * (transportProrationDays / 30))
+      : 0
 
   const salaryEarningsCop = roundCop(
     (config.earningsItems ?? []).reduce((acc, item) => acc + (item.isSalary ? item.amountCop : 0), 0),
@@ -686,7 +712,7 @@ export function summarizeMonth(
     (config.earningsItems ?? []).reduce((acc, item) => acc + (!item.isSalary ? item.amountCop : 0), 0),
   )
 
-  const grossPayCop = roundCop(shiftPayCop + transportAllowanceCop + salaryEarningsCop + nonSalaryEarningsCop)
+  const grossPayCop = roundCop(shiftPayCop + transportAllowanceCop + connectivityAllowanceCop + salaryEarningsCop + nonSalaryEarningsCop)
 
   const cotizationDays = Math.min(30, Array.from(cotizationDay.values()).reduce((acc, v) => acc + v, 0))
   const cotizationProration = cotizationDays / 30
@@ -706,10 +732,32 @@ export function summarizeMonth(
     config.applyStandardDeductions && config.applySolidarityFund && config.smmlvCop > 0
       ? roundCop(ibcCop * solidarityFundRate(ibcCop / config.smmlvCop))
       : 0
+  const retencionCop = roundCop(ibcCop * (config.retentionPct ?? 0))
 
   const otherDeductionsCop = roundCop((config.deductionItems ?? []).reduce((acc, item) => acc + item.amountCop, 0))
-  const totalDeductionsCop = roundCop(healthCop + pensionCop + solidarityFundCop + otherDeductionsCop)
+  const totalDeductionsCop = roundCop(healthCop + pensionCop + solidarityFundCop + retencionCop + otherDeductionsCop)
   const netPayCop = roundCop(grossPayCop - totalDeductionsCop)
+
+  const cesantiasPct = config.cesantiasPct ?? 0.0833
+  const interesesCesantiasPct = config.interesesCesantiasPct ?? 0.01
+  const primaPct = config.primaPct ?? 0.0833
+  const vacacionesPct = config.vacacionesPct ?? 0.0417
+
+  const cesantiasCop = roundCop(salaryBaseForIbc * cesantiasPct * cotizationProration)
+  const interesesCesantiasCop = roundCop(cesantiasCop * interesesCesantiasPct)
+  const primaCop = roundCop(salaryBaseForIbc * primaPct * cotizationProration)
+  const vacacionesCop = roundCop(salaryBaseForIbc * vacacionesPct * cotizationProration)
+
+  const arlPct = config.arlPct ?? 0.005
+  const cajaPct = config.cajaPct ?? 0.04
+  const icbfPct = config.icbfPct ?? 0.03
+  const senaPct = config.senaPct ?? 0.02
+
+  const arlCop = roundCop(ibcCop * arlPct)
+  const cajaCop = roundCop(ibcCop * cajaPct)
+  const icbfCop = roundCop(ibcCop * icbfPct)
+  const senaCop = roundCop(ibcCop * senaPct)
+  const employerCostCop = roundCop(arlCop + cajaCop + icbfCop + senaCop + cesantiasCop + interesesCesantiasCop + primaCop + vacacionesCop)
 
   return {
     monthISO: config.monthISO,
@@ -721,6 +769,7 @@ export function summarizeMonth(
     transportEligible,
     transportProrationDays,
     transportAllowanceCop,
+    connectivityAllowanceCop,
     salaryEarningsCop,
     nonSalaryEarningsCop,
     grossPayCop,
@@ -728,9 +777,19 @@ export function summarizeMonth(
     healthCop,
     pensionCop,
     solidarityFundCop,
+    retencionCop,
     otherDeductionsCop,
     totalDeductionsCop,
     netPayCop,
+    cesantiasCop,
+    interesesCesantiasCop,
+    primaCop,
+    vacacionesCop,
+    arlCop,
+    cajaCop,
+    icbfCop,
+    senaCop,
+    employerCostCop,
     hoursDay,
     hoursNight,
     hoursSundayOrHolidayDay,
