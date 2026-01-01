@@ -1821,349 +1821,109 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
             </div>
           </>
         ) : null}
-        {activeNavId === 'turnos' && false ? (
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className={cardClass}>
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <div className="text-base font-semibold text-slate-950">Registrar turnos</div>
-                  <div className="mt-1 text-sm text-slate-600">
-                    Para turnos trabajados selecciona día y turno. El rango se usa solo para vacaciones, licencias e incapacidades.
+        {editingRowId ? (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/40 p-4">
+            <div className="mx-auto flex min-h-full w-full max-w-lg items-start justify-center sm:items-center">
+              <div className="w-full max-w-lg rounded-3xl bg-white p-6 ring-1 ring-slate-200 sm:max-h-[calc(100vh-3rem)] sm:overflow-y-auto">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-base font-semibold text-slate-950">Editar turno</div>
+                    <div className="mt-1 text-sm text-slate-600">Actualiza la fecha, turno o novedad.</div>
                   </div>
-                </div>
-              </div>
-
-              {!supabase ? (
-                <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
-                  Servicio no disponible. Contacta al administrador.
-                </div>
-              ) : null}
-
-              <div className="mt-4 grid gap-3">
-                <div className={requiresRange ? 'grid gap-3 sm:grid-cols-2' : 'grid gap-3'}>
-                  <label className="text-sm text-slate-700">
-                    {requiresRange ? 'Inicio' : 'Día'}
-                    <input className={inputClass} value={startISO} onChange={(e) => setStartISO(e.target.value)} type="date" />
-                  </label>
-                  {requiresRange ? (
-                    <label className="text-sm text-slate-700">
-                      Fin
-                      <input className={inputClass} value={endISO} onChange={(e) => setEndISO(e.target.value)} type="date" />
-                    </label>
-                  ) : null}
-                </div>
-                <label className="text-sm text-slate-700">
-                  Turno
-                  <select className={selectClass} value={shift} onChange={(e) => setShift(e.target.value as ShiftType)}>
-                    {shiftOptions.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {shift === 'adicional' ? (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="text-sm text-slate-700">
-                      Hora inicio (adicional)
-                      <input
-                        className={inputClass}
-                        type="time"
-                        value={additionalStartTimeHHmm}
-                        onChange={(e) => setAdditionalStartTimeHHmm(e.target.value)}
-                      />
-                    </label>
-                    <label className="text-sm text-slate-700">
-                      Hora fin (adicional)
-                      <input className={inputClass} type="time" value={additionalEndTimeHHmm} onChange={(e) => setAdditionalEndTimeHHmm(e.target.value)} />
-                    </label>
-                  </div>
-                ) : null}
-                <label className="text-sm text-slate-700">
-                  Novedad
-                  <select className={selectClass} value={novelty} onChange={(e) => setNovelty(e.target.value as NoveltyType)}>
-                    {noveltyOptions.map((n) => (
-                      <option key={n.value} value={n.value}>
-                        {n.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {requiresRange ? (
-                    <button type="button" onClick={onPreview} disabled={!hourlyRate} className={btnNeutral}>
-                      Previsualizar
-                    </button>
-                  ) : null}
-                  <button type="button" onClick={onSaveTurns} disabled={!hourlyRate || savingRows} className={btnPrimary}>
-                    {savingRows ? 'Guardando…' : 'Guardar'}
+                  <button type="button" className={btnNeutral} onClick={() => setEditingRowId(null)} disabled={savingEdit}>
+                    Cerrar
                   </button>
                 </div>
-                {!requiresRange ? <div className="text-xs text-slate-600">Previsualización automática al cambiar día/turno.</div> : null}
-                <div className="text-xs text-slate-600">
-                  Hora estimada: {hourlyRate != null ? formatCop(hourlyRate as number) : '—'} (44h/semana)
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-6">
-              {preview ? (
-                <div className={cardClass}>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                    <div className="text-base font-semibold text-slate-950">Previsualización</div>
-                    <div className="text-sm text-slate-600">
-                      Total: {formatCop((preview ?? []).reduce((acc, p) => acc + p.breakdown.totalPayCop, 0))}
-                    </div>
-                  </div>
-                  <div className="mt-4 grid gap-2">
-                    {(preview ?? []).slice(0, 20).map((p) => (
-                      <div
-                        key={`${p.dateISO}-${p.shift}-${p.novelty}`}
-                        className="flex flex-col gap-2 border-t border-slate-200 pt-2 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3"
-                      >
-                        <div className="flex min-w-0 flex-wrap items-center gap-2 text-slate-700">
-                          <span className="wrap-break-word">
-                            {p.dateISO} · {shiftOptions.find((s) => s.value === p.shift)?.label}
-                          </span>
-                          {(() => {
-                            const badge = dayBadge(p.dateISO, p.breakdown)
-                            return <span className={badgeTone[badge.tone]}>{badge.label}</span>
-                          })()}
-                          {p.shift === 'adicional' || hasOvertime(p.breakdown) ? (
-                            <span className={badgeTone.extra}>{p.shift === 'adicional' ? 'Adicional' : 'Horas extra'}</span>
-                          ) : null}
-                        </div>
-                        <span
-                          className="w-fit rounded-full border px-3 py-1 text-xs text-slate-900 sm:shrink-0 sm:self-center"
-                          style={{ borderColor: noveltyTint(p.novelty) }}
-                        >
-                          {formatCop(p.breakdown.totalPayCop)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  {(preview ?? []).length > 20 ? (
-                    <div className="mt-2 text-xs text-slate-600">Mostrando 20 de {(preview ?? []).length}</div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              <div className={cardClass}>
-                <div className="text-base font-semibold text-slate-950">Últimos turnos guardados</div>
-                <div className="mt-3">
+                <div className="mt-4 grid gap-3">
                   <label className="text-sm text-slate-700">
-                    Buscar
-                    <input
-                      className={inputClass}
-                      value={savedSearch}
-                      onChange={(e) => setSavedSearch(e.target.value)}
-                      placeholder="Fecha o palabras clave: festivos, domingos, nocturnas, adicional, extra…"
-                    />
+                    Día
+                    <input className={inputClass} value={editWorkDateISO} onChange={(e) => setEditWorkDateISO(e.target.value)} type="date" />
                   </label>
-                  {saved && savedSearch.trim() && savedFiltered ? (
-                    <div className="mt-2 text-xs text-slate-600">
-                      Mostrando {(savedFiltered ?? []).length} de {(saved ?? []).length}
+                  <label className="text-sm text-slate-700">
+                    Turno
+                    <select className={selectClass} value={editShift} onChange={(e) => setEditShift(e.target.value as ShiftType)}>
+                      {shiftOptions.map((s) => (
+                        <option key={s.value} value={s.value}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {editShift === 'adicional' ? (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="text-sm text-slate-700">
+                        Hora inicio (adicional)
+                        <input
+                          className={inputClass}
+                          type="time"
+                          value={editAdditionalStartTimeHHmm}
+                          onChange={(e) => setEditAdditionalStartTimeHHmm(e.target.value)}
+                        />
+                      </label>
+                      <label className="text-sm text-slate-700">
+                        Hora fin (adicional)
+                        <input
+                          className={inputClass}
+                          type="time"
+                          value={editAdditionalEndTimeHHmm}
+                          onChange={(e) => setEditAdditionalEndTimeHHmm(e.target.value)}
+                        />
+                      </label>
                     </div>
                   ) : null}
-                </div>
-                {loadingRows ? (
-                  <div className="mt-3 text-sm text-slate-600">Cargando…</div>
-                ) : !saved ? (
-                  <div className="mt-3 text-sm text-slate-700">
-                    No se pudieron leer turnos desde el dispositivo{rowsLoadError ? `: ${rowsLoadError}` : ''}.
-                    <div className="mt-3">
-                      <button
-                        type="button"
-                        className={btnNeutral}
-                        onClick={copySupabaseSetupSql}
-                        disabled={!navigator.clipboard}
-                      >
-                        Copiar SQL de la tabla
-                      </button>
+                  <label className="text-sm text-slate-700">
+                    Novedad
+                    <select className={selectClass} value={editNovelty} onChange={(e) => setEditNovelty(e.target.value as NoveltyType)}>
+                      {noveltyOptions.map((n) => (
+                        <option key={n.value} value={n.value}>
+                          {n.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-slate-700">Total</span>
+                      <span className="text-slate-950">{editPreview ? formatCop(editPreview!.breakdown.totalPayCop) : '—'}</span>
                     </div>
                   </div>
-                ) : (saved ?? []).length === 0 ? (
-                  <div className="mt-3 text-sm text-slate-600">Aún no hay turnos guardados.</div>
-                ) : (savedFiltered ?? []).length === 0 ? (
-                  <div className="mt-3 text-sm text-slate-600">Sin resultados.</div>
-                ) : (
-                  <div className="mt-4 grid gap-2">
-                    {(savedFiltered ?? []).map((row) => (
-                      <div
-                        key={row.id}
-                        className="flex flex-col gap-3 border-t border-slate-200 pt-2 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-3"
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate text-slate-700">
-                            {row.work_date} · {shiftOptions.find((s) => s.value === row.shift)?.label}
-                          </div>
-                          <div className="mt-1 flex flex-wrap items-center gap-1">
-                            {(() => {
-                              const badge = dayBadge(row.work_date, row.breakdown)
-                              return <span className={badgeTone[badge.tone]}>{badge.label}</span>
-                            })()}
-                            {row.shift === 'adicional' || hasOvertime(row.breakdown) ? (
-                              <span className={badgeTone.extra}>{row.shift === 'adicional' ? 'Adicional' : 'Horas extra'}</span>
-                            ) : null}
-                          </div>
-                          <div className="mt-1 text-xs text-slate-500">{noveltyLabel(row.novelty)}</div>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
-                          <span
-                            className="rounded-full border px-3 py-1 text-xs text-slate-900"
-                            style={{ borderColor: noveltyTint(row.novelty) }}
-                          >
-                            {formatCop(row.total_pay_cop)}
-                          </span>
-                          <button
-                            type="button"
-                            className="rounded-xl bg-white px-3 py-2 text-xs font-medium text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-950/20"
-                            onClick={() => {
-                              setError(null)
-                              setInfo(null)
-                              setEditingRowId(row.id)
-                              setEditWorkDateISO(row.work_date)
-                              setEditShift(row.shift)
-                              setEditNovelty(row.novelty)
-                              setEditAdditionalStartTimeHHmm(row.breakdown?.additionalStartTimeHHmm ?? '18:00')
-                              setEditAdditionalEndTimeHHmm(row.breakdown?.additionalEndTimeHHmm ?? '19:00')
-                            }}
-                          >
-                            Editar
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-medium text-white hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-600/30"
-                            onClick={() => {
-                              setError(null)
-                              setInfo(null)
-                              setDeletingRowId(row.id)
-                            }}
-                          >
-                            Eliminar
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {editingRowId ? (
-              <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/40 p-4">
-                <div className="mx-auto flex min-h-full w-full max-w-lg items-start justify-center sm:items-center">
-                  <div className="w-full max-w-lg rounded-3xl bg-white p-6 ring-1 ring-slate-200 sm:max-h-[calc(100vh-3rem)] sm:overflow-y-auto">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-base font-semibold text-slate-950">Editar turno</div>
-                      <div className="mt-1 text-sm text-slate-600">Actualiza la fecha, turno o novedad.</div>
-                    </div>
-                    <button
-                      type="button"
-                      className={btnNeutral}
-                      onClick={() => setEditingRowId(null)}
-                      disabled={savingEdit}
-                    >
-                      Cerrar
-                    </button>
-                  </div>
-
-                  <div className="mt-4 grid gap-3">
-                    <label className="text-sm text-slate-700">
-                      Día
-                      <input className={inputClass} value={editWorkDateISO} onChange={(e) => setEditWorkDateISO(e.target.value)} type="date" />
-                    </label>
-                    <label className="text-sm text-slate-700">
-                      Turno
-                      <select className={selectClass} value={editShift} onChange={(e) => setEditShift(e.target.value as ShiftType)}>
-                        {shiftOptions.map((s) => (
-                          <option key={s.value} value={s.value}>
-                            {s.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    {editShift === 'adicional' ? (
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <label className="text-sm text-slate-700">
-                          Hora inicio (adicional)
-                          <input
-                            className={inputClass}
-                            type="time"
-                            value={editAdditionalStartTimeHHmm}
-                            onChange={(e) => setEditAdditionalStartTimeHHmm(e.target.value)}
-                          />
-                        </label>
-                        <label className="text-sm text-slate-700">
-                          Hora fin (adicional)
-                          <input
-                            className={inputClass}
-                            type="time"
-                            value={editAdditionalEndTimeHHmm}
-                            onChange={(e) => setEditAdditionalEndTimeHHmm(e.target.value)}
-                          />
-                        </label>
-                      </div>
-                    ) : null}
-                    <label className="text-sm text-slate-700">
-                      Novedad
-                      <select className={selectClass} value={editNovelty} onChange={(e) => setEditNovelty(e.target.value as NoveltyType)}>
-                        {noveltyOptions.map((n) => (
-                          <option key={n.value} value={n.value}>
-                            {n.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
-                      <div className="flex items-center justify-between gap-3 text-sm">
-                        <span className="text-slate-700">Total</span>
-                        <span className="text-slate-950">{editPreview ? formatCop(editPreview!.breakdown.totalPayCop) : '—'}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      <button type="button" className={btnNeutral} onClick={() => setEditingRowId(null)} disabled={savingEdit}>
-                        Cancelar
-                      </button>
-                      <button type="button" className={btnPrimary} onClick={onSaveEditRow} disabled={!editPreview || savingEdit}>
-                        {savingEdit ? 'Guardando…' : 'Guardar cambios'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                </div>
-              </div>
-            ) : null}
-
-            {deletingRowId ? (
-              <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/40 p-4">
-                <div className="mx-auto flex min-h-full w-full max-w-md items-start justify-center sm:items-center">
-                  <div className="w-full max-w-md rounded-3xl bg-white p-6 ring-1 ring-slate-200 sm:max-h-[calc(100vh-3rem)] sm:overflow-y-auto">
-                  <div className="text-base font-semibold text-slate-950">Eliminar turno</div>
-                  <div className="mt-2 text-sm text-slate-600">Esta acción no se puede deshacer.</div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button type="button" className={btnNeutral} onClick={() => setDeletingRowId(null)} disabled={savingEdit}>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button type="button" className={btnNeutral} onClick={() => setEditingRowId(null)} disabled={savingEdit}>
                       Cancelar
                     </button>
-                    <button
-                      type="button"
-                      className="inline-flex items-center justify-center rounded-xl bg-rose-600 px-3 py-2 text-sm font-medium text-white hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-600/30 disabled:cursor-not-allowed disabled:opacity-50"
-                      onClick={onConfirmDeleteRow}
-                      disabled={savingEdit}
-                    >
-                      {savingEdit ? 'Eliminando…' : 'Eliminar'}
+                    <button type="button" className={btnPrimary} onClick={onSaveEditRow} disabled={!editPreview || savingEdit}>
+                      {savingEdit ? 'Guardando…' : 'Guardar cambios'}
                     </button>
                   </div>
                 </div>
-                </div>
               </div>
-            ) : null}
+            </div>
           </div>
         ) : null}
+        {deletingRowId ? (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/40 p-4">
+            <div className="mx-auto flex min-h-full w-full max-w-md items-start justify-center sm:items-center">
+              <div className="w-full max-w-md rounded-3xl bg-white p-6 ring-1 ring-slate-200 sm:max-h-[calc(100vh-3rem)] sm:overflow-y-auto">
+                <div className="text-base font-semibold text-slate-950">Eliminar turno</div>
+                <div className="mt-2 text-sm text-slate-600">Esta acción no se puede deshacer.</div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button type="button" className={btnNeutral} onClick={() => setDeletingRowId(null)} disabled={savingEdit}>
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-xl bg-rose-600 px-3 py-2 text-sm font-medium text-white hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-600/30 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={onConfirmDeleteRow}
+                    disabled={savingEdit}
+                  >
+                    {savingEdit ? 'Eliminando…' : 'Eliminar'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        
 
         {activeNavId === 'config' ? (
           <div className="grid gap-6 lg:grid-cols-2">
