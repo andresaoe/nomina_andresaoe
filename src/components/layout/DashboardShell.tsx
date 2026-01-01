@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import NavBar from './NavBar'
 
 type NavItem = {
   id: string
@@ -18,6 +19,7 @@ export default function DashboardShell(props: {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-50">
+      <NavBar />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(900px_circle_at_15%_-10%,rgba(99,102,241,0.14),transparent_60%),radial-gradient(700px_circle_at_85%_0%,rgba(236,72,153,0.10),transparent_55%),radial-gradient(900px_circle_at_50%_110%,rgba(34,197,94,0.08),transparent_55%)]" />
       <div className="pointer-events-none absolute inset-0 opacity-35 bg-[radial-gradient(rgba(15,23,42,0.10)_1px,transparent_1px)] bg-size-[22px_22px]" />
 

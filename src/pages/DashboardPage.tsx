@@ -6,6 +6,7 @@ import { useSession } from '../hooks/useSession'
 import DashboardShell from '../components/layout/DashboardShell'
 import SimpleBarChart from '../components/dashboard/SimpleBarChart'
 import MonthlySummary from '../components/dashboard/MonthlySummary'
+import TurnosPanel from '../components/dashboard/TurnosPanel'
 import {
   countUnsyncedLocalShiftEntries,
   deleteLocalShiftEntriesByIds,
@@ -1686,6 +1687,141 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
         ) : null}
 
         {activeNavId === 'turnos' ? (
+          <>
+            <TurnosPanel
+              cardClass={cardClass}
+              inputClass={inputClass}
+              selectClass={selectClass}
+              btnPrimary={btnPrimary}
+              btnNeutral={btnNeutral}
+              badgeTone={badgeTone}
+              supabaseAvailable={Boolean(supabase)}
+              requiresRange={requiresRange}
+              startISO={startISO}
+              setStartISO={setStartISO}
+              endISO={endISO}
+              setEndISO={setEndISO}
+              shift={shift}
+              setShift={setShift}
+              additionalStartTimeHHmm={additionalStartTimeHHmm}
+              setAdditionalStartTimeHHmm={setAdditionalStartTimeHHmm}
+              additionalEndTimeHHmm={additionalEndTimeHHmm}
+              setAdditionalEndTimeHHmm={setAdditionalEndTimeHHmm}
+              novelty={novelty}
+              setNovelty={setNovelty}
+              shiftOptions={shiftOptions}
+              noveltyOptions={noveltyOptions}
+              hourlyRate={hourlyRate}
+              onPreview={onPreview}
+              onSaveTurns={onSaveTurns}
+              savingRows={savingRows}
+              preview={preview}
+              dayBadge={dayBadge}
+              hasOvertime={hasOvertime}
+            />
+            <div className={cardClass}>
+              <div className="text-base font-semibold text-slate-950">Últimos turnos guardados</div>
+              <div className="mt-3">
+                <label className="text-sm text-slate-700">
+                  Buscar
+                  <input
+                    className={inputClass}
+                    value={savedSearch}
+                    onChange={(e) => setSavedSearch(e.target.value)}
+                    placeholder="Fecha o palabras clave: festivos, domingos, nocturnas, adicional, extra…"
+                  />
+                </label>
+                {saved && savedSearch.trim() && savedFiltered ? (
+                  <div className="mt-2 text-xs text-slate-600">
+                    Mostrando {savedFiltered.length} de {saved.length}
+                  </div>
+                ) : null}
+              </div>
+              {loadingRows ? (
+                <div className="mt-3 text-sm text-slate-600">Cargando…</div>
+              ) : !saved ? (
+                <div className="mt-3 text-sm text-slate-700">
+                  No se pudieron leer turnos desde el dispositivo{rowsLoadError ? `: ${rowsLoadError}` : ''}.
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      className={btnNeutral}
+                      onClick={copySupabaseSetupSql}
+                      disabled={!navigator.clipboard}
+                    >
+                      Copiar SQL de la tabla
+                    </button>
+                  </div>
+                </div>
+              ) : saved.length === 0 ? (
+                <div className="mt-3 text-sm text-slate-600">Aún no hay turnos guardados.</div>
+              ) : savedFiltered && savedFiltered.length === 0 ? (
+                <div className="mt-3 text-sm text-slate-600">Sin resultados.</div>
+              ) : (
+                <div className="mt-4 grid gap-2">
+                  {(savedFiltered ?? []).map((row) => (
+                    <div
+                      key={row.id}
+                      className="flex flex-col gap-3 border-t border-slate-200 pt-2 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-slate-700">
+                          {row.work_date} · {shiftOptions.find((s) => s.value === row.shift)?.label}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                          {(() => {
+                            const badge = dayBadge(row.work_date, row.breakdown)
+                            return <span className={badgeTone[badge.tone]}>{badge.label}</span>
+                          })()}
+                          {row.shift === 'adicional' || hasOvertime(row.breakdown) ? (
+                            <span className={badgeTone.extra}>{row.shift === 'adicional' ? 'Adicional' : 'Horas extra'}</span>
+                          ) : null}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">{noveltyLabel(row.novelty)}</div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
+                        <span
+                          className="rounded-full border px-3 py-1 text-xs text-slate-900"
+                          style={{ borderColor: noveltyTint(row.novelty) }}
+                        >
+                          {formatCop(row.total_pay_cop)}
+                        </span>
+                        <button
+                          type="button"
+                          className="rounded-xl bg-white px-3 py-2 text-xs font-medium text-slate-900 ring-1 ring-slate-200 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-950/20"
+                          onClick={() => {
+                            setError(null)
+                            setInfo(null)
+                            setEditingRowId(row.id)
+                            setEditWorkDateISO(row.work_date)
+                            setEditShift(row.shift)
+                            setEditNovelty(row.novelty)
+                            setEditAdditionalStartTimeHHmm(row.breakdown?.additionalStartTimeHHmm ?? '18:00')
+                            setEditAdditionalEndTimeHHmm(row.breakdown?.additionalEndTimeHHmm ?? '19:00')
+                          }}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-medium text-white hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-600/30"
+                          onClick={() => {
+                            setError(null)
+                            setInfo(null)
+                            setDeletingRowId(row.id)
+                          }}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        ) : null}
+        {activeNavId === 'turnos' && false ? (
           <div className="grid gap-6 lg:grid-cols-2">
             <div className={cardClass}>
               <div className="flex items-center justify-between gap-4">
@@ -1766,7 +1902,7 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
                 </div>
                 {!requiresRange ? <div className="text-xs text-slate-600">Previsualización automática al cambiar día/turno.</div> : null}
                 <div className="text-xs text-slate-600">
-                  Hora estimada: {hourlyRate ? formatCop(hourlyRate) : '—'} (44h/semana)
+                  Hora estimada: {hourlyRate != null ? formatCop(hourlyRate as number) : '—'} (44h/semana)
                 </div>
               </div>
             </div>
@@ -1777,11 +1913,11 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                     <div className="text-base font-semibold text-slate-950">Previsualización</div>
                     <div className="text-sm text-slate-600">
-                      Total: {formatCop(preview.reduce((acc, p) => acc + p.breakdown.totalPayCop, 0))}
+                      Total: {formatCop((preview ?? []).reduce((acc, p) => acc + p.breakdown.totalPayCop, 0))}
                     </div>
                   </div>
                   <div className="mt-4 grid gap-2">
-                    {preview.slice(0, 20).map((p) => (
+                    {(preview ?? []).slice(0, 20).map((p) => (
                       <div
                         key={`${p.dateISO}-${p.shift}-${p.novelty}`}
                         className="flex flex-col gap-2 border-t border-slate-200 pt-2 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3"
@@ -1807,7 +1943,9 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
                       </div>
                     ))}
                   </div>
-                  {preview.length > 20 ? <div className="mt-2 text-xs text-slate-600">Mostrando 20 de {preview.length}</div> : null}
+                  {(preview ?? []).length > 20 ? (
+                    <div className="mt-2 text-xs text-slate-600">Mostrando 20 de {(preview ?? []).length}</div>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -1825,7 +1963,7 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
                   </label>
                   {saved && savedSearch.trim() && savedFiltered ? (
                     <div className="mt-2 text-xs text-slate-600">
-                      Mostrando {savedFiltered.length} de {saved.length}
+                      Mostrando {(savedFiltered ?? []).length} de {(saved ?? []).length}
                     </div>
                   ) : null}
                 </div>
@@ -1845,9 +1983,9 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
                       </button>
                     </div>
                   </div>
-                ) : saved.length === 0 ? (
+                ) : (saved ?? []).length === 0 ? (
                   <div className="mt-3 text-sm text-slate-600">Aún no hay turnos guardados.</div>
-                ) : savedFiltered && savedFiltered.length === 0 ? (
+                ) : (savedFiltered ?? []).length === 0 ? (
                   <div className="mt-3 text-sm text-slate-600">Sin resultados.</div>
                 ) : (
                   <div className="mt-4 grid gap-2">
@@ -1983,7 +2121,7 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
                     <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
                       <div className="flex items-center justify-between gap-3 text-sm">
                         <span className="text-slate-700">Total</span>
-                        <span className="text-slate-950">{editPreview ? formatCop(editPreview.breakdown.totalPayCop) : '—'}</span>
+                        <span className="text-slate-950">{editPreview ? formatCop(editPreview!.breakdown.totalPayCop) : '—'}</span>
                       </div>
                     </div>
 
