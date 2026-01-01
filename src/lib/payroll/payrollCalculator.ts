@@ -186,6 +186,10 @@ export function calculateShifts(
         return { dateISO, shift, novelty, breakdown }
       }
 
+      let hoursDay = 0
+      let hoursNight = 0
+      let hoursSundayOrHolidayDay = 0
+      let hoursSundayOrHolidayNight = 0
       let overtimeDay = 0
       let overtimeNight = 0
       let overtimeSundayOrHolidayDay = 0
@@ -200,17 +204,29 @@ export function calculateShifts(
         const sliceEnd = next.getTime() > range.end.getTime() ? range.end : next
         const sliceHours = (sliceEnd.getTime() - t.getTime()) / (60 * 60 * 1000)
 
+        const weekKey = weekStartISO(t)
+        const weekUsed = weekOrdinaryUsed.get(weekKey) ?? 0
+        const isOvertime = weekUsed >= weeklyOrdinaryLimit
+
         const night = isNight(t)
         const sundayOrHoliday = isSundayOrHoliday(t)
-        const premium = premiumPercentage(t, true, night, sundayOrHoliday)
+        const premium = premiumPercentage(t, isOvertime, night, sundayOrHoliday)
 
         baseSum += hourlyRateCop * sliceHours
         premiumSum += hourlyRateCop * premium * sliceHours
 
-        if (sundayOrHoliday && night) overtimeSundayOrHolidayNight += sliceHours
-        else if (sundayOrHoliday) overtimeSundayOrHolidayDay += sliceHours
-        else if (night) overtimeNight += sliceHours
-        else overtimeDay += sliceHours
+        if (isOvertime) {
+          if (sundayOrHoliday && night) overtimeSundayOrHolidayNight += sliceHours
+          else if (sundayOrHoliday) overtimeSundayOrHolidayDay += sliceHours
+          else if (night) overtimeNight += sliceHours
+          else overtimeDay += sliceHours
+        } else {
+          if (sundayOrHoliday && night) hoursSundayOrHolidayNight += sliceHours
+          else if (sundayOrHoliday) hoursSundayOrHolidayDay += sliceHours
+          else if (night) hoursNight += sliceHours
+          else hoursDay += sliceHours
+          weekOrdinaryUsed.set(weekKey, weekUsed + sliceHours)
+        }
 
         if (sliceEnd.getTime() >= range.end.getTime()) break
         t = sliceEnd
@@ -224,11 +240,11 @@ export function calculateShifts(
       const totalPayCop = roundCop(baseSum + premiumSum)
 
       const breakdown: ShiftCalcBreakdown = {
-        hoursTotal: overtimeHoursTotal,
-        hoursDay: 0,
-        hoursNight: 0,
-        hoursSundayOrHolidayDay: 0,
-        hoursSundayOrHolidayNight: 0,
+        hoursTotal: hoursDay + hoursNight + hoursSundayOrHolidayDay + hoursSundayOrHolidayNight + overtimeHoursTotal,
+        hoursDay,
+        hoursNight,
+        hoursSundayOrHolidayDay,
+        hoursSundayOrHolidayNight,
         overtimeHoursTotal,
         overtimeDay,
         overtimeNight,
@@ -343,6 +359,7 @@ export function calculateShiftsMerged(
   inputs: ShiftInput[],
   hourlyRateCop: number,
   weeklyOrdinaryLimit = 44,
+  existingOrdinaryUsage?: Record<string, number>,
 ): ShiftCalculation[] {
   const items = inputs.map((input, index) => ({ ...input, id: String(index) }))
 
@@ -386,6 +403,11 @@ export function calculateShiftsMerged(
   >()
 
   const weekOrdinaryUsed = new Map<string, number>()
+  if (existingOrdinaryUsage) {
+    for (const [weekISO, used] of Object.entries(existingOrdinaryUsage)) {
+      if (Number.isFinite(used) && used > 0) weekOrdinaryUsed.set(weekISO, used)
+    }
+  }
 
   for (const e of hourEvents) {
     const weekKey = weekStartISO(e.time)

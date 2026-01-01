@@ -45,9 +45,12 @@ describe('payrollCalculator', () => {
       startTimeHHmm: '18:00',
       endTimeHHmm: '20:00',
     })
-    expect(calc?.breakdown.overtimeHoursTotal).toBe(2)
+    console.log('adicional-breakdown-1800-2000', calc?.breakdown)
+    expect(calc?.breakdown.hoursSundayOrHolidayDay).toBe(2)
+    expect(calc?.breakdown.overtimeHoursTotal).toBe(0)
     expect(calc?.breakdown.basePayCop).toBe(2000)
-    expect(calc?.breakdown.totalPayCop).toBeGreaterThan(2000)
+    expect(calc?.breakdown.surchargePayCop).toBe(1500)
+    expect(calc?.breakdown.totalPayCop).toBe(3500)
   })
 
   it('marca horas dominicales en turno adicional', () => {
@@ -56,8 +59,8 @@ describe('payrollCalculator', () => {
       startTimeHHmm: '10:00',
       endTimeHHmm: '12:00',
     })
-    expect(calc?.breakdown.overtimeSundayOrHolidayDay).toBe(2)
-    expect(calc?.breakdown.overtimeHoursTotal).toBe(2)
+    expect(calc?.breakdown.hoursSundayOrHolidayDay).toBe(2)
+    expect(calc?.breakdown.overtimeHoursTotal).toBe(0)
   })
 
   it('marca horas festivas (Ascensión trasladada a lunes) en turno adicional', () => {
@@ -66,8 +69,8 @@ describe('payrollCalculator', () => {
       startTimeHHmm: '10:00',
       endTimeHHmm: '12:00',
     })
-    expect(calc?.breakdown.overtimeSundayOrHolidayDay).toBe(2)
-    expect(calc?.breakdown.overtimeHoursTotal).toBe(2)
+    expect(calc?.breakdown.hoursSundayOrHolidayDay).toBe(2)
+    expect(calc?.breakdown.overtimeHoursTotal).toBe(0)
   })
 
   it('separa horas diurnas/nocturnas en turno adicional según el rango', () => {
@@ -76,9 +79,9 @@ describe('payrollCalculator', () => {
       startTimeHHmm: '18:00',
       endTimeHHmm: '20:00',
     })
-    expect(calc?.breakdown.overtimeDay).toBe(1)
-    expect(calc?.breakdown.overtimeNight).toBe(1)
-    expect(calc?.breakdown.overtimeHoursTotal).toBe(2)
+    expect(calc?.breakdown.hoursDay).toBe(1)
+    expect(calc?.breakdown.hoursNight).toBe(1)
+    expect(calc?.breakdown.overtimeHoursTotal).toBe(0)
   })
 
   it('aplica recargo dom/fest 75% antes de 2025-07-01', () => {

@@ -893,7 +893,18 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
 
       const current = dates.map((d) => ({ dateISO: d, shift, novelty, tag: 'new' as const }))
 
-      const merged = calculateShiftsMerged([...existing, ...current], hourlyRate)
+      const existingOrdinaryUsage: Record<string, number> = {}
+      for (const r of localExisting) {
+        const weekISO = weekStartIsoFromDateISO(r.work_date)
+        const ordinaryHours =
+          (r.breakdown?.hoursDay ?? 0) +
+          (r.breakdown?.hoursNight ?? 0) +
+          (r.breakdown?.hoursSundayOrHolidayDay ?? 0) +
+          (r.breakdown?.hoursSundayOrHolidayNight ?? 0)
+        existingOrdinaryUsage[weekISO] = (existingOrdinaryUsage[weekISO] ?? 0) + ordinaryHours
+      }
+
+      const merged = calculateShiftsMerged([...existing, ...current], hourlyRate, 44, existingOrdinaryUsage)
       return merged.slice(existing.length)
     },
     [additionalEndTimeHHmm, additionalStartTimeHHmm, currentUserId, endISO, hourlyRate, novelty, session.status, shift, startISO],
