@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { readJson, writeJson } from '../lib/storage'
 import { formatCop } from '../lib/payroll/payrollCalculator'
+import NavBar from '../components/layout/NavBar'
+import { Link } from 'react-router-dom'
 
 type ExpenseItem = {
   id: string
@@ -27,6 +29,25 @@ export default function ExpensesPage() {
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
   const [dateISO, setDateISO] = useState(() => new Date().toISOString().slice(0, 10))
+  const categories = [
+    'General',
+    'Restaurantes',
+    'Supermercado',
+    'Gasolina',
+    'Transporte',
+    'Servicios',
+    'Arriendo',
+    'Salud',
+    'Educación',
+    'Entretenimiento',
+    'Ropa',
+    'Tecnología',
+    'Mascotas',
+    'Viajes',
+    'Regalos',
+    'Impuestos',
+    'Otros',
+  ]
 
   const [goalLabel, setGoalLabel] = useState('')
   const [goalTarget, setGoalTarget] = useState('')
@@ -96,6 +117,7 @@ export default function ExpensesPage() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-50">
+      <NavBar />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(900px_circle_at_15%_-10%,rgba(99,102,241,0.14),transparent_60%),radial-gradient(700px_circle_at_85%_0%,rgba(236,72,153,0.10),transparent_55%),radial-gradient(900px_circle_at_50%_110%,rgba(34,197,94,0.08),transparent_55%)]" />
       <div className="pointer-events-none absolute inset-0 opacity-35 bg-[radial-gradient(rgba(15,23,42,0.10)_1px,transparent_1px)] bg-size-[22px_22px]" />
 
@@ -105,7 +127,15 @@ export default function ExpensesPage() {
             <div className="text-xl font-semibold text-slate-950">Control de gastos</div>
             <div className="text-sm text-slate-600">Registra tus gastos y metas de ahorro</div>
           </div>
-          <div className="text-xs text-slate-500">Hoy: {todayLabel}</div>
+          <div className="flex items-center gap-3">
+            <Link
+              to="/dashboard"
+              className="rounded-xl bg-white/80 px-3 py-1 text-sm font-medium text-slate-900 shadow-sm ring-1 ring-slate-200/70 backdrop-blur hover:bg-white"
+            >
+              ← Volver al dashboard
+            </Link>
+            <div className="text-xs text-slate-500">Hoy: {todayLabel}</div>
+          </div>
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -118,7 +148,17 @@ export default function ExpensesPage() {
               </label>
               <label className="text-sm text-slate-700">
                 Categoría
-                <input className="mt-1 w-full rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2 text-sm text-slate-950 shadow-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="General" />
+                <select
+                  className="mt-1 w-full rounded-xl border border-slate-200/70 bg-white/80 px-3 py-2 text-sm text-slate-950 shadow-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                >
+                  {categories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="text-sm text-slate-700">
                 Monto (COP)

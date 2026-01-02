@@ -1,24 +1,19 @@
 import { useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { useSession } from '../../hooks/useSession'
 
 export default function NavBar() {
   const location = useLocation()
   const [open, setOpen] = useState(false)
+  const session = useSession()
   const path = location.pathname
-  const items = useMemo(
-    () => [
-      { to: '/', label: 'Inicio' },
-      { to: '/auth', label: 'Auth' },
-      { to: '/dashboard', label: 'Dashboard' },
-      { to: '/gastos', label: 'Gastos' },
-    ],
-    [],
-  )
+  const homeTo = session.status === 'signed_in' ? '/dashboard' : '/'
+  const items = useMemo(() => [{ to: homeTo, label: 'Inicio' }, { to: '/dashboard', label: 'Dashboard' }, { to: '/gastos', label: 'Gastos' }], [homeTo])
   return (
     <header className="sticky top-0 z-50 w-full bg-white/80 shadow-sm ring-1 ring-slate-200/70 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3">
-          <Link to="/" className="flex items-center gap-2">
+          <Link to={homeTo} className="flex items-center gap-2">
             <span className="inline-block h-6 w-6 rounded-md bg-linear-to-r from-indigo-500 to-fuchsia-500" />
             <span className="text-sm font-semibold text-slate-950">Nómina</span>
           </Link>

@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { getSupabase, isSupabaseConfigured, onSupabaseConfigChange, setSupabaseConfig } from '../lib/supabaseClient'
 import { useSession } from '../hooks/useSession'
 import { readJson, writeJson } from '../lib/storage'
-import NavBar from '../components/layout/NavBar'
 
 const PENDING_VERIFY_EMAIL_KEY = 'cn_pending_verify_email_v1'
 
@@ -169,96 +168,12 @@ export default function AuthPage() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950">
-      <NavBar />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(1200px_circle_at_20%_10%,rgba(99,102,241,0.26),transparent_60%),radial-gradient(900px_circle_at_85%_20%,rgba(236,72,153,0.20),transparent_55%),radial-gradient(900px_circle_at_50%_90%,rgba(34,197,94,0.14),transparent_55%)]" />
       <div className="pointer-events-none absolute inset-0 opacity-30 bg-[radial-gradient(rgba(148,163,184,0.25)_1px,transparent_1px)] bg-size-[24px_24px]" />
 
       <div className="relative mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-3xl bg-white/10 p-6 text-slate-100 shadow-[0_24px_80px_-50px_rgba(0,0,0,0.7)] ring-1 ring-white/15 backdrop-blur-xl">
-            <h1 className="text-xl font-semibold sm:text-2xl">
-              <span className="bg-linear-to-r from-indigo-200 via-white to-fuchsia-200 bg-clip-text text-transparent">
-                Control de Nómina
-              </span>
-              <span className="block text-sm font-medium text-slate-300">by @andresaoe</span>
-            </h1>
-            <p className="mt-2 text-sm text-slate-300">
-              Inicia sesión para usar el dashboard de turnos y cálculo automático.
-            </p>
-            {!supabaseReady ? (
-              <div className="mt-4 grid gap-3">
-                <div className="rounded-2xl border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-                  Servicio no disponible. Falta configurar Supabase.
-                </div>
-                <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
-                  <div className="text-sm font-medium text-slate-100">Configurar Supabase</div>
-                  <div className="mt-1 text-sm text-slate-300">
-                    Si publicaste en Vercel, asegúrate de configurar las variables VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY. Como alternativa, puedes pegarlas aquí (se guardan en este navegador).
-                  </div>
-                  <form className="mt-4 grid gap-3" onSubmit={onSaveSupabaseConfig}>
-                    <label className="text-sm text-slate-200">
-                      URL de Supabase
-                      <input
-                        className={inputClass}
-                        value={supabaseUrlInput}
-                        onChange={(e) => setSupabaseUrlInput(e.target.value)}
-                        placeholder="https://xxxx.supabase.co"
-                        autoComplete="off"
-                      />
-                    </label>
-                    <label className="text-sm text-slate-200">
-                      ANON key
-                      <input
-                        className={inputClass}
-                        value={supabaseAnonKeyInput}
-                        onChange={(e) => setSupabaseAnonKeyInput(e.target.value)}
-                        placeholder="eyJhbGciOi..."
-                        autoComplete="off"
-                      />
-                    </label>
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      <button type="submit" className={btnPrimary} disabled={!supabaseUrlInput.trim() || !supabaseAnonKeyInput.trim()}>
-                        Guardar
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            ) : null}
-
-            {error ? (
-              <div className="mt-4 rounded-2xl border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-                {error}
-              </div>
-            ) : null}
-            {info ? (
-              <div className="mt-4 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-                {info}
-              </div>
-            ) : null}
-
-            {pendingVerificationEmail ? (
-              <div className="mt-4 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
-                <div className="text-sm font-medium text-slate-100">Verificación de correo</div>
-                <div className="mt-2 text-sm text-slate-300">{pendingVerificationEmail}</div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    onClick={() => onResendVerificationEmail(pendingVerificationEmail)}
-                    type="button"
-                    className={btnPrimary}
-                    disabled={resending || loading || !supabaseReady}
-                  >
-                    {resending ? 'Reenviando…' : 'Reenviar correo'}
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          <form
-            className="rounded-3xl bg-white/10 p-6 text-slate-100 shadow-[0_24px_80px_-50px_rgba(0,0,0,0.7)] ring-1 ring-white/15 backdrop-blur-xl"
-            onSubmit={mode === 'login' ? onLoginSubmit : onRegisterSubmit}
-          >
+        <div className="grid gap-6">
+          <form className="rounded-3xl bg-white/10 p-6 text-slate-100 shadow-[0_24px_80px_-50px_rgba(0,0,0,0.7)] ring-1 ring-white/15 backdrop-blur-xl" onSubmit={mode === 'login' ? onLoginSubmit : onRegisterSubmit}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="text-xl font-semibold">{mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}</div>
               <div className="flex rounded-full bg-white/5 p-1 ring-1 ring-white/10">
@@ -360,6 +275,86 @@ export default function AuthPage() {
               ) : null}
             </div>
           </form>
+          
+          <div className="rounded-3xl bg-white/10 p-6 text-slate-100 shadow-[0_24px_80px_-50px_rgba(0,0,0,0.7)] ring-1 ring-white/15 backdrop-blur-xl">
+            <h1 className="text-xl font-semibold sm:text-2xl">
+              <span className="bg-linear-to-r from-indigo-200 via-white to-fuchsia-200 bg-clip-text text-transparent">
+                Control de Nómina
+              </span>
+              <span className="block text-sm font-medium text-slate-300">by @andresaoe</span>
+            </h1>
+            <p className="mt-2 text-sm text-slate-300">
+              Inicia sesión para usar el dashboard de turnos y cálculo automático.
+            </p>
+            {!supabaseReady ? (
+              <div className="mt-4 grid gap-3">
+                <div className="rounded-2xl border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                  Servicio no disponible. Falta configurar Supabase.
+                </div>
+                <div className="rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
+                  <div className="text-sm font-medium text-slate-100">Configurar Supabase</div>
+                  <div className="mt-1 text-sm text-slate-300">
+                    Si publicaste en Vercel, asegúrate de configurar las variables VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY. Como alternativa, puedes pegarlas aquí (se guardan en este navegador).
+                  </div>
+                  <form className="mt-4 grid gap-3" onSubmit={onSaveSupabaseConfig}>
+                    <label className="text-sm text-slate-200">
+                      URL de Supabase
+                      <input
+                        className={inputClass}
+                        value={supabaseUrlInput}
+                        onChange={(e) => setSupabaseUrlInput(e.target.value)}
+                        placeholder="https://xxxx.supabase.co"
+                        autoComplete="off"
+                      />
+                    </label>
+                    <label className="text-sm text-slate-200">
+                      ANON key
+                      <input
+                        className={inputClass}
+                        value={supabaseAnonKeyInput}
+                        onChange={(e) => setSupabaseAnonKeyInput(e.target.value)}
+                        placeholder="eyJhbGciOi..."
+                        autoComplete="off"
+                      />
+                    </label>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <button type="submit" className={btnPrimary} disabled={!supabaseUrlInput.trim() || !supabaseAnonKeyInput.trim()}>
+                        Guardar
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            ) : null}
+
+            {error ? (
+              <div className="mt-4 rounded-2xl border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                {error}
+              </div>
+            ) : null}
+            {info ? (
+              <div className="mt-4 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+                {info}
+              </div>
+            ) : null}
+
+            {pendingVerificationEmail ? (
+              <div className="mt-4 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
+                <div className="text-sm font-medium text-slate-100">Verificación de correo</div>
+                <div className="mt-2 text-sm text-slate-300">{pendingVerificationEmail}</div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => onResendVerificationEmail(pendingVerificationEmail)}
+                    type="button"
+                    className={btnPrimary}
+                    disabled={resending || loading || !supabaseReady}
+                  >
+                    {resending ? 'Reenviando…' : 'Reenviar correo'}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>
