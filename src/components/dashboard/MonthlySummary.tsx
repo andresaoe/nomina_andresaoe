@@ -28,7 +28,8 @@ export default function MonthlySummary({
 }: Props) {
   const fspRateApplied =
     monthSummary && monthSummary.ibcCop > 0 ? monthSummary.solidarityFundCop / monthSummary.ibcCop : null
-  const fspTone = fspRateApplied !== null && fspRateApplied > 0.02 ? 'warn' : 'default'
+  const fspTone =
+    fspRateApplied === 0 ? 'good' : fspRateApplied !== null && fspRateApplied > 0.02 ? 'warn' : 'default'
   return (
     <div className="grid gap-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
