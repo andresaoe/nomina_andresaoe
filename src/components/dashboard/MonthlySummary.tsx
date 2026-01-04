@@ -26,6 +26,8 @@ export default function MonthlySummary({
   monthLoadError,
   cardClass,
 }: Props) {
+  const fspRateApplied =
+    monthSummary && monthSummary.ibcCop > 0 ? monthSummary.solidarityFundCop / monthSummary.ibcCop : null
   return (
     <div className="grid gap-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -77,6 +79,14 @@ export default function MonthlySummary({
                 <span className="text-slate-700">Fondo de solidaridad</span>
                 <span className="flex items-center gap-2">
                   <span className="text-slate-950">{formatCop(monthSummary.solidarityFundCop)}</span>
+                  {fspRateApplied !== null ? (
+                    <span
+                      className="rounded-full border px-2 py-0.5 text-[10px] text-slate-700"
+                      style={{ borderColor: 'rgba(15, 23, 42, 0.18)' }}
+                    >
+                      Tarifa: {(fspRateApplied * 100).toFixed(1)}%
+                    </span>
+                  ) : null}
                   <span
                     className="rounded-full border px-2 py-0.5 text-[10px] text-slate-700"
                     style={{ borderColor: 'rgba(15, 23, 42, 0.18)' }}
