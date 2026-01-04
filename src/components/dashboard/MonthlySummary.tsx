@@ -46,7 +46,13 @@ export default function MonthlySummary({
         <KpiCard
           label="FSP Tarifa"
           value={fspRateApplied !== null ? `${(fspRateApplied * 100).toFixed(1)}%` : '—'}
-          helper={monthSummary ? `Base: ${formatCop(monthSummary.ibcCop)}` : undefined}
+          helper={
+            monthSummary
+              ? `Base: ${formatCop(monthSummary.ibcCop)}${
+                  fspRateApplied === 0 ? ' · No aporta por IBC < 4 SMLMV' : ''
+                }`
+              : undefined
+          }
           tone={fspTone}
         />
       </div>
