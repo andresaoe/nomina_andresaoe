@@ -6,6 +6,11 @@ const NOCTURNAL_19_START_MS = parseISO('2025-12-25').getTime()
 const SUNDAY_HOLIDAY_80_START_MS = parseISO('2025-07-01').getTime()
 const SUNDAY_HOLIDAY_90_START_MS = parseISO('2026-07-01').getTime()
 const SUNDAY_HOLIDAY_100_START_MS = parseISO('2027-07-01').getTime()
+const FSP_REFORM_START_MS = parseISO('2025-07-01').getTime()
+const WEEKLY_47_START_MS = parseISO('2023-07-16').getTime()
+const WEEKLY_46_START_MS = parseISO('2024-07-16').getTime()
+const WEEKLY_44_START_MS = parseISO('2025-07-16').getTime()
+const WEEKLY_42_START_MS = parseISO('2026-07-15').getTime()
 
 export function formatCop(value: number) {
   return new Intl.NumberFormat('es-CO', {
@@ -23,8 +28,18 @@ export function monthlyOrdinaryHours(weeklyHours = 44) {
   return (weeklyHours * 52) / 12
 }
 
-export function hourlyRateFromBaseSalaryCop(baseSalaryCop: number, weeklyHours = 44) {
-  return baseSalaryCop / monthlyOrdinaryHours(weeklyHours)
+export function weeklyHoursDefaultForDate(date: Date) {
+  const t = startOfDay(date).getTime()
+  if (t >= WEEKLY_42_START_MS) return 42
+  if (t >= WEEKLY_44_START_MS) return 44
+  if (t >= WEEKLY_46_START_MS) return 46
+  if (t >= WEEKLY_47_START_MS) return 47
+  return 48
+}
+
+export function hourlyRateFromBaseSalaryCop(baseSalaryCop: number, weeklyHours?: number) {
+  const hours = weeklyHours ?? weeklyHoursDefaultForDate(new Date())
+  return baseSalaryCop / monthlyOrdinaryHours(hours)
 }
 
 function isSundayOrHoliday(date: Date) {
@@ -115,6 +130,10 @@ function sundayOrHolidaySurchargePct(date: Date) {
   return 0.75
 }
 
+function weeklyOrdinaryLimitForInstant(date: Date) {
+  return weeklyHoursDefaultForDate(date)
+}
+
 function premiumPercentage(at: Date, isOvertime: boolean, isNightHour: boolean, isSundayHolidayHour: boolean) {
   if (isOvertime) {
     if (isSundayHolidayHour && isNightHour) return 1.5
@@ -134,7 +153,7 @@ export function calculateShifts(
   shift: ShiftType,
   novelty: NoveltyType,
   hourlyRateCop: number,
-  weeklyOrdinaryLimit = 44,
+  weeklyOrdinaryLimit?: number,
   additionalTimeRange?: AdditionalTimeRange | null,
 ): ShiftCalculation[] {
   const weekOrdinaryUsed = new Map<string, number>()
@@ -206,7 +225,8 @@ export function calculateShifts(
 
         const weekKey = weekStartISO(t)
         const weekUsed = weekOrdinaryUsed.get(weekKey) ?? 0
-        const isOvertime = weekUsed >= weeklyOrdinaryLimit
+        const effectiveWeeklyLimit = weeklyOrdinaryLimit ?? weeklyOrdinaryLimitForInstant(t)
+        const isOvertime = weekUsed >= effectiveWeeklyLimit
 
         const night = isNight(t)
         const sundayOrHoliday = isSundayOrHoliday(t)
@@ -301,7 +321,8 @@ export function calculateShifts(
       const weekUsed = weekOrdinaryUsed.get(weekKey) ?? 0
       const night = isNight(t)
       const sundayOrHoliday = isSundayOrHoliday(t)
-      const isOvertime = weekUsed >= weeklyOrdinaryLimit
+      const effectiveWeeklyLimit = weeklyOrdinaryLimit ?? weeklyOrdinaryLimitForInstant(t)
+      const isOvertime = weekUsed >= effectiveWeeklyLimit
 
       const premium = premiumPercentage(t, isOvertime, night, sundayOrHoliday)
       baseSum += hourlyRateCop
@@ -358,7 +379,7 @@ export type ShiftInput = {
 export function calculateShiftsMerged(
   inputs: ShiftInput[],
   hourlyRateCop: number,
-  weeklyOrdinaryLimit = 44,
+  weeklyOrdinaryLimit?: number,
   existingOrdinaryUsage?: Record<string, number>,
 ): ShiftCalculation[] {
   const items = inputs.map((input, index) => ({ ...input, id: String(index) }))
@@ -412,7 +433,8 @@ export function calculateShiftsMerged(
   for (const e of hourEvents) {
     const weekKey = weekStartISO(e.time)
     const weekUsed = weekOrdinaryUsed.get(weekKey) ?? 0
-    const overtime = weekUsed >= weeklyOrdinaryLimit
+    const effectiveWeeklyLimit = weeklyOrdinaryLimit ?? weeklyOrdinaryLimitForInstant(e.time)
+    const overtime = weekUsed >= effectiveWeeklyLimit
     if (!overtime) weekOrdinaryUsed.set(weekKey, weekUsed + 1)
 
     const premium = premiumPercentage(e.time, overtime, e.night, e.sundayOrHoliday)
@@ -630,7 +652,16 @@ function clamp(value: number, min: number, max: number) {
   return value
 }
 
-function solidarityFundRate(ibcSmmlv: number) {
+function solidarityFundRate(ibcSmmlv: number, refMonthISO: string) {
+  const t = startOfDay(parseISO(`${refMonthISO}-01`)).getTime()
+  if (t >= FSP_REFORM_START_MS) {
+    if (ibcSmmlv < 4) return 0
+    if (ibcSmmlv < 7) return 0.015
+    if (ibcSmmlv < 11) return 0.018
+    if (ibcSmmlv < 19) return 0.025
+    if (ibcSmmlv < 20) return 0.028
+    return 0.03
+  }
   if (ibcSmmlv < 4) return 0
   if (ibcSmmlv < 16) return 0.01
   if (ibcSmmlv < 17) return 0.012
@@ -730,7 +761,7 @@ export function summarizeMonth(
 
   const solidarityFundCop =
     config.applyStandardDeductions && config.applySolidarityFund && config.smmlvCop > 0
-      ? roundCop(ibcCop * solidarityFundRate(ibcCop / config.smmlvCop))
+      ? roundCop(ibcCop * solidarityFundRate(ibcCop / config.smmlvCop, config.monthISO))
       : 0
   const retencionCop = roundCop(ibcCop * (config.retentionPct ?? 0))
 

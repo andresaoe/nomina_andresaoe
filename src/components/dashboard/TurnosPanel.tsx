@@ -1,5 +1,5 @@
 import type { ShiftCalcBreakdown, ShiftCalculation, ShiftType, NoveltyType } from '../../lib/payroll/types'
-import { formatCop } from '../../lib/payroll/payrollCalculator'
+import { formatCop, weeklyHoursDefaultForDate } from '../../lib/payroll/payrollCalculator'
 
 type BadgeTone = 'normal' | 'sunday' | 'holiday' | 'extra'
 
@@ -67,6 +67,8 @@ export default function TurnosPanel(props: Props) {
     dayBadge,
     hasOvertime,
   } = props
+
+  const weeklyHoursLabel = weeklyHoursDefaultForDate(new Date(`${startISO}T00:00:00`))
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -148,7 +150,7 @@ export default function TurnosPanel(props: Props) {
             </button>
           </div>
           {!requiresRange ? <div className="text-xs text-slate-600">Previsualización automática al cambiar día/turno.</div> : null}
-          <div className="text-xs text-slate-600">Hora estimada: {hourlyRate ? formatCop(hourlyRate) : '—'} (44h/semana)</div>
+          <div className="text-xs text-slate-600">Hora estimada: {hourlyRate ? formatCop(hourlyRate) : '—'} ({weeklyHoursLabel}h/semana)</div>
         </div>
       </div>
 
