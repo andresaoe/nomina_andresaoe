@@ -75,7 +75,20 @@ export default function MonthlySummary({
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-slate-700">Fondo de solidaridad</span>
-                <span className="text-slate-950">{formatCop(monthSummary.solidarityFundCop)}</span>
+                <span className="flex items-center gap-2">
+                  <span className="text-slate-950">{formatCop(monthSummary.solidarityFundCop)}</span>
+                  <span
+                    className="rounded-full border px-2 py-0.5 text-[10px] text-slate-700"
+                    style={{ borderColor: 'rgba(15, 23, 42, 0.18)' }}
+                    title={
+                      selectedMonthPrefix >= '2025-07'
+                        ? 'Bandas FSP vigentes: ≥4 y <7 SMLMV: 1.5% · ≥7 y <11: 1.8% · ≥11 y <19: 2.5% · ≥19 y <20: 2.8% · ≥20: 3%'
+                        : 'Bandas FSP vigentes: ≥4 y <16 SMLMV: 1% · ≥16 y <17: 1.2% · ≥17 y <18: 1.4% · ≥18 y <19: 1.6% · ≥19 y <20: 1.8% · ≥20: 2%'
+                    }
+                  >
+                    Info
+                  </span>
+                </span>
               </div>
               <div className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200">
                 Horas: Diurnas {monthSummary.hoursDay} · Nocturnas {monthSummary.hoursNight} · Dom/Fest diurnas {monthSummary.hoursSundayOrHolidayDay} · Dom/Fest nocturnas {monthSummary.hoursSundayOrHolidayNight} · Extra {monthSummary.overtimeHoursTotal}
