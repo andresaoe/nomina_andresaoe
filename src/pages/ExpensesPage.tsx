@@ -3,6 +3,7 @@ import { format } from 'date-fns'
 import { readJson, writeJson } from '../lib/storage'
 import { formatCop } from '../lib/payroll/payrollCalculator'
 import NavBar from '../components/layout/NavBar'
+import Footer from '../components/layout/Footer'
 import { Link } from 'react-router-dom'
 
 type ExpenseItem = {
@@ -287,6 +288,7 @@ export default function ExpensesPage() {
             </div>
           </div>
         </div>
+        <Footer />
       </div>
     </div>
   )

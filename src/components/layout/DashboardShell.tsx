@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import NavBar from './NavBar'
+import Footer from './Footer'
 
 type NavItem = {
   id: string
@@ -81,6 +82,7 @@ export default function DashboardShell(props: {
             </div>
 
             <div className="mt-6">{children}</div>
+            <Footer />
           </div>
         </div>
       </div>
