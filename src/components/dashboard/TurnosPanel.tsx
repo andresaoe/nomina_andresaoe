@@ -1,40 +1,76 @@
+import { useState } from 'react'
 import type { ShiftCalcBreakdown, ShiftCalculation, ShiftType, NoveltyType } from '../../lib/payroll/types'
 import { formatCop, weeklyHoursDefaultForDate } from '../../lib/payroll/payrollCalculator'
 
+/**
+ * Tipos de tono para las insignias (badges) de estado.
+ */
 type BadgeTone = 'normal' | 'sunday' | 'holiday' | 'extra'
 
+/**
+ * Props para el componente TurnosPanel.
+ * Maneja la entrada de datos para el cálculo y registro de turnos.
+ */
 type Props = {
+  /** Clases CSS para el contenedor de tarjeta */
   cardClass: string
+  /** Clases CSS para inputs */
   inputClass: string
+  /** Clases CSS para selects */
   selectClass: string
+  /** Clases CSS para botón primario */
   btnPrimary: string
+  /** Clases CSS para botón neutral */
   btnNeutral: string
+  /** Mapa de colores para los badges */
   badgeTone: Record<BadgeTone, string>
+  /** Indica si Supabase está configurado */
   supabaseAvailable: boolean
+  /** Indica si la novedad seleccionada requiere un rango de fechas */
   requiresRange: boolean
+  /** Fecha de inicio en formato ISO */
   startISO: string
   setStartISO: (v: string) => void
+  /** Fecha de fin en formato ISO */
   endISO: string
   setEndISO: (v: string) => void
+  /** Tipo de turno seleccionado */
   shift: ShiftType
   setShift: (v: ShiftType) => void
+  /** Hora inicio para turno adicional (HH:mm) */
   additionalStartTimeHHmm: string
   setAdditionalStartTimeHHmm: (v: string) => void
+  /** Hora fin para turno adicional (HH:mm) */
   additionalEndTimeHHmm: string
   setAdditionalEndTimeHHmm: (v: string) => void
+  /** Tipo de novedad seleccionada */
   novelty: NoveltyType
   setNovelty: (v: NoveltyType) => void
+  /** Opciones disponibles para turno */
   shiftOptions: { value: ShiftType; label: string }[]
+  /** Opciones disponibles para novedad */
   noveltyOptions: { value: NoveltyType; label: string }[]
+  /** Valor de la hora ordinaria calculada */
   hourlyRate: number | null
+  /** Función para previsualizar cálculo */
   onPreview: () => Promise<void> | void
+  /** Función para guardar los turnos */
   onSaveTurns: () => Promise<void> | void
+  /** Estado de carga al guardar */
   savingRows: boolean
+  /** Datos de previsualización */
   preview: ShiftCalculation[] | null
+  /** Función para determinar el badge del día */
   dayBadge: (dateISO: string, breakdown?: ShiftCalcBreakdown) => { label: string; tone: BadgeTone }
+  /** Función para verificar si hay horas extra */
   hasOvertime: (breakdown?: ShiftCalcBreakdown) => boolean
 }
 
+/**
+ * Componente TurnosPanel.
+ * Formulario principal para registrar turnos o novedades (vacaciones, incapacidades).
+ * Incluye validación de fechas y horas antes de guardar.
+ */
 export default function TurnosPanel(props: Props) {
   const {
     cardClass,
@@ -68,7 +104,41 @@ export default function TurnosPanel(props: Props) {
     hasOvertime,
   } = props
 
+  const [validationError, setValidationError] = useState<string | null>(null)
+
+  // Etiqueta dinámica para la jornada laboral según el año (Ley 2101 de 2021)
   const weeklyHoursLabel = weeklyHoursDefaultForDate(new Date(`${startISO}T00:00:00`))
+
+  /**
+   * Maneja el guardado validando los inputs primero.
+   */
+  const handleSave = () => {
+    setValidationError(null)
+    
+    // Validación: Fecha final no puede ser menor a inicial en rangos
+    if (requiresRange) {
+      if (startISO > endISO) {
+        setValidationError('La fecha final no puede ser anterior a la fecha inicial.')
+        return
+      }
+    }
+
+    // Validación: Turno adicional requiere horas válidas
+    if (shift === 'adicional') {
+      if (!additionalStartTimeHHmm || !additionalEndTimeHHmm) {
+        setValidationError('Debes indicar hora de inicio y fin para el turno adicional.')
+        return
+      }
+      // Validación simple de formato HH:mm
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
+      if (!timeRegex.test(additionalStartTimeHHmm) || !timeRegex.test(additionalEndTimeHHmm)) {
+        setValidationError('El formato de hora debe ser HH:mm (ej. 14:30).')
+        return
+      }
+    }
+
+    onSaveTurns()
+  }
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -145,10 +215,11 @@ export default function TurnosPanel(props: Props) {
                 Previsualizar
               </button>
             ) : null}
-            <button type="button" onClick={onSaveTurns} disabled={!hourlyRate || savingRows} className={btnPrimary}>
+            <button type="button" onClick={handleSave} disabled={!hourlyRate || savingRows} className={btnPrimary}>
               {savingRows ? 'Guardando…' : 'Guardar'}
             </button>
           </div>
+          {validationError ? <div className="text-sm text-rose-600 font-medium">{validationError}</div> : null}
           {!requiresRange ? <div className="text-xs text-slate-600">Previsualización automática al cambiar día/turno.</div> : null}
           <div className="text-xs text-slate-600">Hora estimada: {hourlyRate ? formatCop(hourlyRate) : '—'} ({weeklyHoursLabel}h/semana)</div>
         </div>

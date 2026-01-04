@@ -142,6 +142,11 @@ function escapeHtml(value: string) {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
 }
 
+/**
+ * Componente principal del Dashboard.
+ * Maneja la lógica de estado global, navegación, sincronización offline-first con Supabase,
+ * y orquesta los subcomponentes de resumen, turnos y configuración.
+ */
 export default function DashboardPage() {
   const navigate = useNavigate()
   const session = useSession()
@@ -1187,6 +1192,10 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
     }
   }
 
+  /**
+   * Guarda la configuración de nómina del usuario en Supabase (user_metadata).
+   * Valida rangos y tipos de datos para salario, auxilios y porcentajes de seguridad social.
+   */
   async function onSavePayrollConfig() {
     setError(null)
     setInfo(null)
@@ -1233,6 +1242,28 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
     if (connectivityAllowanceCop < 0) {
       setError('El auxilio de conectividad debe ser un entero positivo.')
       return
+    }
+
+    // Validar listas de devengos y deducciones
+    for (const item of earningsItems) {
+      if (!item.label.trim()) {
+        setError('Todos los devengos adicionales deben tener nombre.')
+        return
+      }
+      if (item.amountCop <= 0) {
+        setError(`El devengo "${item.label}" debe tener un valor mayor a 0.`)
+        return
+      }
+    }
+    for (const item of deductionItems) {
+      if (!item.label.trim()) {
+        setError('Todas las deducciones adicionales deben tener nombre.')
+        return
+      }
+      if (item.amountCop <= 0) {
+        setError(`La deducción "${item.label}" debe tener un valor mayor a 0.`)
+        return
+      }
     }
 
     setSavingConfig(true)
@@ -1285,6 +1316,11 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
     setPreview(await calculateForRange(dates))
   }
 
+  /**
+   * Guarda los turnos generados.
+   * Realiza validaciones de sesión y configuración salarial.
+   * Usa estrategia Offline-First: guarda en IndexedDB siempre, e intenta sincronizar con Supabase si hay conexión.
+   */
   async function onSaveTurns() {
     setError(null)
     setInfo(null)
@@ -1298,6 +1334,12 @@ create index if not exists shift_entries_user_created_idx on public.shift_entrie
     }
     if (!hourlyRate) {
       setError('Configura primero la base salarial.')
+      return
+    }
+
+    // Validación de integridad de fechas (aunque UI lo valide, backend/controller debe asegurar)
+    if (requiresRange && startISO > endISO) {
+      setError('Rango de fechas inválido.')
       return
     }
 

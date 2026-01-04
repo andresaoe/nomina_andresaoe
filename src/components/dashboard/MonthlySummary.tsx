@@ -3,18 +3,37 @@ import SimpleBarChart from './SimpleBarChart'
 import type { DeductionItem, EarningItem, MonthSummary } from '../../lib/payroll/payrollCalculator'
 import { formatCop } from '../../lib/payroll/payrollCalculator'
 
+/**
+ * Props para el componente MonthlySummary.
+ * Muestra el resumen financiero y operativo del mes seleccionado.
+ */
 type Props = {
+  /** Prefijo del mes seleccionado (YYYY-MM) */
   selectedMonthPrefix: string
+  /** Datos sumarizados del mes */
   monthSummary: MonthSummary | null
+  /** Total calculado para el mes */
   monthTotal: number | null
+  /** Puntos de datos para gráfico diario */
   dailyPayPoints: { label: string; value: number }[]
+  /** Detalle de devengos */
   earningsDetail: { salary: EarningItem[]; nonSalary: EarningItem[] }
+  /** Detalle de deducciones */
   deductionDetail: DeductionItem[]
+  /** Estado de carga del mes */
   loadingMonth: boolean
+  /** Error de carga del mes */
   monthLoadError: string | null
+  /** Clases CSS para tarjetas */
   cardClass: string
 }
 
+/**
+ * Componente MonthlySummary.
+ * Renderiza tarjetas KPI y gráficos de resumen mensual.
+ * Incluye desglose de seguridad social, prestaciones y horas trabajadas.
+ * También muestra el detalle del Fondo de Solidaridad Pensional y su tarifa aplicada.
+ */
 export default function MonthlySummary({
   selectedMonthPrefix,
   monthSummary,
