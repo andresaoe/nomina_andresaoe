@@ -24,7 +24,6 @@ function baseConfig(monthISO: string, smmlvCop = 1000000): MonthSummaryConfig {
 
 function makeEntries(monthISO: string, days = 30): MonthSummaryInput[] {
   const out: MonthSummaryInput[] = []
-  const month = Number(monthISO.split('-')[1])
   for (let d = 1; d <= days; d++) {
     const dayISO = `${monthISO}-${String(d).padStart(2, '0')}`
     out.push({
