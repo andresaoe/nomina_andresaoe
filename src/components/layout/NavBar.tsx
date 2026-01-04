@@ -8,7 +8,15 @@ export default function NavBar() {
   const session = useSession()
   const path = location.pathname
   const homeTo = session.status === 'signed_in' ? '/dashboard' : '/'
-  const items = useMemo(() => [{ to: homeTo, label: 'Inicio' }, { to: '/dashboard', label: 'Dashboard' }, { to: '/gastos', label: 'Gastos' }], [homeTo])
+  const items = useMemo(() => {
+    const list = []
+    if (homeTo === '/') {
+      list.push({ to: '/', label: 'Inicio' })
+    }
+    list.push({ to: '/dashboard', label: 'Dashboard' })
+    list.push({ to: '/gastos', label: 'Gastos' })
+    return list
+  }, [homeTo])
   return (
     <header className="sticky top-0 z-50 w-full bg-white/80 shadow-sm ring-1 ring-slate-200/70 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
