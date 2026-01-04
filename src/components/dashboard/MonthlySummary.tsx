@@ -41,6 +41,7 @@ export default function MonthlySummary({
           helper={monthSummary ? (monthSummary.transportEligible ? `${monthSummary.transportProrationDays.toFixed(2)} / 30` : 'No aplica') : undefined}
         />
         <KpiCard label="Total por turnos" value={monthSummary ? formatCop(monthSummary.shiftPayCop) : '—'} />
+        <KpiCard label="FSP Tarifa" value={fspRateApplied !== null ? `${(fspRateApplied * 100).toFixed(1)}%` : '—'} helper="Fondo de Solidaridad" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
